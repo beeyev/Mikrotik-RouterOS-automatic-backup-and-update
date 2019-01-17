@@ -12,7 +12,8 @@
 :local sensetiveDataInConfig false;
 
 ## Update channel. Possible values: current, bugfix
-:local updateChannel "current";
+## Temporarily disabled
+##:local updateChannel "current";
 ##########
 
 
@@ -26,7 +27,7 @@
 ## if it is a very first step
 :if ([:len $updateStep] = 0) do={
 	## Check for update
-	/system package update set channel=$updateChannel;
+	##/system package update set channel=$updateChannel;
 	/system package update check-for-updates;
 	
 	# If we found some updates
