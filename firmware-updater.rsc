@@ -11,11 +11,11 @@
 ## If true, passwords will be included in exported config
 :local sensetiveDataInConfig false;
 
-## Update channel. Possible values: current, bugfix
+## Update channel. Possible values: stable, long-term
 :local updateChannel "stable";
 
 ## Install only patch versions of firmware updates.
-## Means that new update will be installed only if major and minor version numbers are same as currently installed firmware.
+## Means that new update will be installed only if major and minor version numbers are the same as currently installed firmware.
 ## Example: v6.43.6 => major.minor.PATCH
 :local onlyPatchUpdates	false;
 ##########
@@ -110,6 +110,7 @@
 		}
 	}
 	log info ("Checking for new firmware version. Current version is: $osVerCurrent");
+	/system package update set channel=$updateChannel;
 	/system package update check-for-updates;
 	:delay 5s;
 
