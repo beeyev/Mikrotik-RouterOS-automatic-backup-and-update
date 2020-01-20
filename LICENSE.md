@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2018 Aleksandr Tebiev
+Copyright (c) Alexander Tebiev tebiev@mail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
