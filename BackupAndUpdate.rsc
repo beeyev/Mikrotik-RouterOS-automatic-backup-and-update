@@ -251,6 +251,7 @@
 	:log info ("Bkp&Upd: Performing the second step.");   
 	## RouterOS is the latest, let's check for upgraded routerboard firmware
 	if ($deviceRbCurrentFw != $deviceRbUpgradeFw) do={
+		:delay 10s;
 		:log info "Bkp&Upd: Upgrading routerboard firmware from v.$deviceRbCurrentFw to v.$deviceRbUpgradeFw";
 		## Start the upgrading process
 		/system routerboard upgrade;
@@ -267,6 +268,7 @@
 ## 	STEP THREE: Last step (after second reboot) sending final report
 ## 	steps 2 and 3 are fired only if script is set to automatically update device and if new RouterOs is available.
 :if ($updateStep = 3) do={
+	:delay 1m;
 	:log info "Bkp&Upd: RouterOS and routerboard upgrading process of was completed. New RouterOS version: v.$deviceOsVerInst, routerboard firmware: v.$deviceRbCurrentFw.";
 	:set mailSubject	"Bkp&Upd: Router - $[:pick $deviceIdentityName 0 18] has been upgraded to the new RouterOS v.$deviceOsVerInst!";
 	:set mailBody 	  	"RouterOS and routerboard upgrading process was completed. \r\nNew RouterOS version: v.$deviceOsVerInst, routerboard firmware: v.$deviceRbCurrentFw. \r\n$changelogUrl $mailBodyDeviceInfo $mailBodyCopyright";
