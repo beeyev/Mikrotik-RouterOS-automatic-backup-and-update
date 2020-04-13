@@ -3,9 +3,9 @@
 #----------SCRIPT INFORMATION---------------------------------------------------
 #
 # Script:  Mikrotik RouterOS automatic backup & update
-# Version: 20.01.20
+# Version: 20.04.13
 # Created: 07/08/2018
-# Updated: 20/01/2020
+# Updated: 13/04/2020
 # Author:  Alexander Tebiev
 # Website: https://github.com/beeyev
 # You can contact me by e-mail at tebiev@mail.com
@@ -268,8 +268,9 @@
 ## 	STEP THREE: Last step (after second reboot) sending final report
 ## 	steps 2 and 3 are fired only if script is set to automatically update device and if new RouterOs is available.
 :if ($updateStep = 3) do={
-	:delay 1m;
 	:log info "Bkp&Upd: RouterOS and routerboard upgrading process of was completed. New RouterOS version: v.$deviceOsVerInst, routerboard firmware: v.$deviceRbCurrentFw.";
+	## Small delay in case mikrotik needs some time to initialize connections
+	:delay 1m;
 	:set mailSubject	"Bkp&Upd: Router - $[:pick $deviceIdentityName 0 18] has been upgraded to the new RouterOS v.$deviceOsVerInst!";
 	:set mailBody 	  	"RouterOS and routerboard upgrading process was completed. \r\nNew RouterOS version: v.$deviceOsVerInst, routerboard firmware: v.$deviceRbCurrentFw. \r\n$changelogUrl $mailBodyDeviceInfo $mailBodyCopyright";
 }
@@ -279,6 +280,7 @@
 ##
 # Trying to send email with backups in attachment.
 :if ($updateStep = 1 or $updateStep = 3) do={
+	:log info "Bkp&Upd: Sending email message...";
 	:do {/tool e-mail send to=$emailAddress subject=$mailSubject body=$mailBody file=$mailAttachments;} on-error={
 		:log error "Bkp&Upd: could not send email message ($[/tool e-mail get last-status]). Going to try it again in a while."
 		:delay 5m;
@@ -290,7 +292,9 @@
 				}
 			}
 	}
-	:delay 5s;
+	
+	# Waiting for email to be sent
+	:delay 30s;
 }
 
 
