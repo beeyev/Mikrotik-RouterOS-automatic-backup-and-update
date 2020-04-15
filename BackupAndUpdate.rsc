@@ -3,9 +3,9 @@
 #----------SCRIPT INFORMATION---------------------------------------------------
 #
 # Script:  Mikrotik RouterOS automatic backup & update
-# Version: 20.04.13
+# Version: 20.04.15
 # Created: 07/08/2018
-# Updated: 13/04/2020
+# Updated: 15/04/2020
 # Author:  Alexander Tebiev
 # Website: https://github.com/beeyev
 # You can contact me by e-mail at tebiev@mail.com
@@ -147,7 +147,7 @@
 	## PREPARE BACKUP DATA
 	:log info ("Bkp&Upd: Creating system backups.");   
 
-	:local bname "$deviceIdentityName.$deviceBoardModel.$deviceSerialNumber.v$deviceOsVerInst.$deviceUpdateChannel.$dateTime";
+	:local bname "$deviceIdentityName.$deviceRbModel.$deviceRbSerialNumber.v$deviceOsVerInst.$deviceUpdateChannel.$dateTime";
 	:local backupFileSys "$bname.backup";
 	:local backupFileConfig "$bname.rsc";
 
