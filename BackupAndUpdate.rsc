@@ -23,7 +23,7 @@
 #
 # osupdate 	- 	The Script will install a new RouterOS if it is available.
 #				It will also create backups before and after update process.
-#				Email will be sent only if a new RouterOS is available.
+#				Email will be sent only if a new RouterOS version is available.
 #				Change parameter `forceBackup` if you need the script to create backups every time when it runs.
 #
 # osnotify 	- 	The script will send email notification only (without backups) if a new RouterOS is available.
@@ -365,7 +365,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 
 			if ($isOsNeedsToBeUpdated = true) do={
 				:set isOsNeedsToBeUpdated false;
-				:log warning "$SMP script is not goint to initialise update process due to inability to send backups to email."
+				:log warning "$SMP script is not going to initialise update process due to inability to send backups to email."
 			}
 		}
 	}
