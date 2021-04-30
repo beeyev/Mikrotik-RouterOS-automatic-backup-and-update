@@ -43,7 +43,7 @@ To check email settings, send a test message by running the following command in
 ##### 4. Create scheduled task
 System -> Scheduler [Add]  
 Name: `Backup And Update`  
-Start Time: `03:10:00`  
+Start Time: `03:10:00` (the start time has to be different for all your mikrotik device in a chain)  
 Interval: `1d 00:00:00`  
 On Event: `/system script run BackupAndUpdate;`  
 ![](https://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update/raw/master/howto/scheduler-task.png)  
