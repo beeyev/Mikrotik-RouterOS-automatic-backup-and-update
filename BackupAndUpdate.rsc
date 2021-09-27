@@ -89,6 +89,11 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 	:if ($isBetaPos > 1) do={
 		:set osVer ([:pick $osVer 0 $isBetaPos] . "." . [:pick $osVer ($isBetaPos + 4) [:len $osVer]]);
 	}
+	# Replace word `rc` with dot
+	:local isRcPos [:tonum [:find $osVer "rc" 0]];
+	:if ($isRcPos > 1) do={
+		:set osVer ([:pick $osVer 0 $isRcPos] . "." . [:pick $osVer ($isRcPos + 2) [:len $osVer]]);
+	}
 	
 	:local dotPos1 [:find $osVer "." 0];
 
