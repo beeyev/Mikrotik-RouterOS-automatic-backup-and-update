@@ -14,6 +14,24 @@
 # Minimum supported RouterOS version is v6.43.7
 #
 #----------MODIFY THIS SECTION AS NEEDED----------------------------------------
+##
+## FTP variables
+##
+# Set to true if you want to backup also to FTP, otherwise set to false
+:local ftpBackupToFtp false;
+# Specify FTP server address and port
+:local ftpAddress 1.2.3.4;
+:local ftpPort 21;
+# Specify ftp user name and password
+:local ftpUser "ftp_user";
+:local ftpPass "ftp_password";
+# Define path on the FTP server where to store backups (! must end with / !).
+:local ftpDest "Path/On/FTP/Server/";
+
+## Include backup files in email? When set to true, backups will be attached to email message.
+## When false, email will include only text information, but no attachements.
+:local sendBackupToEmail false;
+
 ## Notification e-mail
 ## (Make sure you have configurated Email settings in Tools -> Email)
 :local emailAddress "yourmail@example.com";
@@ -169,6 +187,9 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 :global buGlobalVarUpdateStep;
 ############### ^^^^^^^^^ GLOBALS ^^^^^^^^^ ###############
 
+# Counter for successfully uploaded files via FTP
+:local ftpUploadSuccess 0;
+
 #Current date time in format: 2020jan15-221324 
 :local dateTime ([:pick [/system clock get date] 7 11] . [:pick [/system clock get date] 0 3] . [:pick [/system clock get date] 4 6] . "-" . [:pick [/system clock get time] 0 2] . [:pick [/system clock get time] 3 5] . [:pick [/system clock get time] 6 8]);
 
@@ -247,7 +268,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 		:set scriptMode "backup";
 	};
 
-	if ($forceBackup = true) do={
+	if ($forceBackup = true and $sendBackupToEmail = true) do={
 		# In this case the script will always send email, because it has to create backups
 		:set isSendEmailRequired true;
 	}
@@ -299,7 +320,15 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 		};
 
 		:set mailSubject	($mailSubject . " Backup was created.");
-		:set mailBody		($mailBody . "System backups were created and attached to this email.");
+		:set mailBody		($mailBody . "System backups were created ");
+		if ($sendBackupToEmail = true) do={
+			:set mailBody		($mailBody . "and attached to this email");
+		}
+		if ($ftpBackupToFtp = true) do={
+			:set mailBody		($mailBody . " and will be sent to FTP server.");
+		} else={
+			:set mailBody		($mailBody . ".");
+		}
 
 		:set mailAttachments [$buGlobalFuncCreateBackups backupName=$backupNameFinal backupPassword=$backupPassword sensetiveDataInConfig=$sensetiveDataInConfig];
 	} else={
@@ -352,37 +381,78 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 :do {/system script environment remove buGlobalFuncCreateBackups;} on-error={}
 
 ##
+## UPLOAD VIA FTP
+##
+# Try to upload backup files to FTP server
+
+:if ($ftpBackupToFtp = true) do={
+	:log info "$SMP Trying to upload backup files to server $ftpAddress";
+	:foreach flnm in=$mailAttachments do={
+			:do {/tool fetch mode=ftp address="$ftpAddress" port="$ftpPort" user="$ftpUser" password="$ftpPass" src-path="$flnm" dst-path=("$ftpDest" . "$flnm") upload=yes;
+			# Increase number of successfully uploaded files
+			:set ftpUploadSuccess	($ftpUploadSuccess +1);
+		} on-error={
+			:delay 5s;
+			:log error "$SMP could not upload $flnm to ftp server $ftpAddress";
+			# Do not initialize update process if backup failed
+			:set isOsNeedsToBeUpdated false;
+			:log warning "$SMP script is not going to initialise update process due to inability to upload backups to ftp server.";
+			:set mailBody 	  	($mailBody . "\r\n\r\nWARNING!\r\nBackups of the system failed to upload to FTP server.\r\n");
+		}
+	}
+}
+
+##
 ## SENDING EMAIL
 ##
 # Trying to send email with backups in attachment.
 
 :if ($isSendEmailRequired = true) do={
-	:log info "$SMP Sending email message, it will take around half a minute...";
-	:do {/tool e-mail send to=$emailAddress subject=$mailSubject body=$mailBody file=$mailAttachments;} on-error={
-		:delay 5s;
-		:log error "$SMP could not send email message ($[/tool e-mail get last-status]). Going to try it again in a while."
-
-		:delay 5m;
-
-		:do {/tool e-mail send to=$emailAddress subject=$mailSubject body=$mailBody file=$mailAttachments;} on-error={
+	:log info "$SMP Sending email message, it will take around half a minute..."
+	:if ($sendBackupToEmail = true) do={
+		:do {/tool e-mail send to=$emailAddress subject=$mailSubject body=$mailBody file=$mailAttachments;
+		} on-error={
 			:delay 5s;
-			:log error "$SMP could not send email message ($[/tool e-mail get last-status]) for the second time."
-
-			if ($isOsNeedsToBeUpdated = true) do={
-				:set isOsNeedsToBeUpdated false;
-				:log warning "$SMP script is not going to initialise update process due to inability to send backups to email."
+			:log error "$SMP could not send email message ($[/tool e-mail get last-status]). Going to try it again in a while.";
+			:delay 5m;
+			:do {/tool e-mail send to=$emailAddress subject=$mailSubject body=$mailBody file=$mailAttachments;
+			} on-error={
+				:delay 5s;
+				:log error "$SMP could not send email message ($[/tool e-mail get last-status]) for the second time."
+	
+				if ($isOsNeedsToBeUpdated = true and $ftpBackupToFtp = false) do={
+					:set isOsNeedsToBeUpdated false;
+					:log warning "$SMP script is not going to initialise update process due to inability to send backups to email and FTP."
+				}
 			}
 		}
+	} else={
+		:do {/tool e-mail send to=$emailAddress subject=$mailSubject body=$mailBody;} on-error={
+			:delay 5s;
+			:log error "$SMP could not send email message ($[/tool e-mail get last-status]). Going to try it again in a while."
+	
+			:delay 5m;
+
+			:do {/tool e-mail send to=$emailAddress subject=$mailSubject body=$mailBody;} on-error={
+				:delay 5s;
+				:log error "$SMP could not send email message ($[/tool e-mail get last-status]) for the second time."
+	
+				if ($ftpBackupToFtp = false) do={
+					:set isOsNeedsToBeUpdated false;
+					:log warning "$SMP script is not going to initialise update process due to inability to send backups to FTP."
+				}
+			}
+		}	
 	}
 
 	:delay 30s;
-	
-	:if ([:len $mailAttachments] > 0 and [/tool e-mail get last-status] = "succeeded") do={
+
+# Cleanup will be performed if there are backup files AND at least one of the email or ftp upload had succeeded.
+	:if ([:len $mailAttachments] > 0 and ([/tool e-mail get last-status] = "succeeded" or ([:len $mailAttachments] = $ftpUploadSuccess))) do={
 		:log info "$SMP File system cleanup."
 		/file remove $mailAttachments; 
 		:delay 2s;
 	}
-	
 }
 
 
