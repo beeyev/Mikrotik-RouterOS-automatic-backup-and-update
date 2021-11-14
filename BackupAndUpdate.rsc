@@ -5,38 +5,61 @@
 # Script:  Mikrotik RouterOS automatic backup & update
 # Version: 21.09.27
 # Created: 07/08/2018
-# Updated: 27/09/2021
+# Updated: 14/11/2021
 # Author:  Alexander Tebiev
 # Website: https://github.com/beeyev
 # You can contact me by e-mail at tebiev@mail.com
 #
+# Fork author: Branislav Susila (https://github.com/BrandonSk)
+
 # IMPORTANT!
-# Minimum supported RouterOS version is v6.43.7
+# Minimum supported RouterOS version is v6.43.7; for SFTP 6.47.4 (bug fix)
 #
 #----------MODIFY THIS SECTION AS NEEDED----------------------------------------
 ##
-## FTP variables
+## Define backup storage methods
 ##
 # Set to true if you want to backup also to FTP, otherwise set to false
-:local ftpBackupToFtp false;
-# Specify FTP server address and port
+:local backupToFtp false;
+# Set to true if you want to send backups to email address
+# When false and email address is specified, sumamry email will be sent
+:local backupToEmail false;
+
+##
+## FTP definition
+##
+# Specify (S)FTP server address, port and if to use secure connection
 :local ftpAddress 1.2.3.4;
 :local ftpPort 21;
+:local ftpUseSecure false;
 # Specify ftp user name and password
 :local ftpUser "ftp_user";
 :local ftpPass "ftp_password";
 # Define path on the FTP server where to store backups (! must end with / !).
 :local ftpDest "Path/On/FTP/Server/";
 
-## Include backup files in email? When set to true, backups will be attached to email message.
-## When false, email will include only text information, but no attachements.
-:local sendBackupToEmail false;
-
+##
+## E-Mail settings
+##
 ## Notification e-mail
 ## (Make sure you have configurated Email settings in Tools -> Email)
 :local emailAddress "yourmail@example.com";
 
-## Script mode, possible values: backup, osupdate, osnotify.
+##
+## BACKUP settings
+##
+## Additional parameter if you set `scriptMode` to `osupdate` or `osnotify` (see below)
+# Set `true` if you want the script to perform backup every time it's fired, whatever script mode is set.
+:local forceBackup false;
+# Backup encryption password, no encryption if no password.
+:local backupPassword ""
+# If true, passwords will be included in exported config.
+:local sensetiveDataInConfig false;
+
+##
+## UPDATE settings
+##
+# Script mode, possible values: backup, osupdate, osnotify.
 # backup 	- 	Only backup will be performed. (default value, if none provided)
 #
 # osupdate 	- 	The Script will install a new RouterOS if it is available.
@@ -47,26 +70,14 @@
 # osnotify 	- 	The script will send email notification only (without backups) if a new RouterOS is available.
 #				Change parameter `forceBackup` if you need the script to create backups every time when it runs.
 :local scriptMode "backup";
-
-## Additional parameter if you set `scriptMode` to `osupdate` or `osnotify`
-# Set `true` if you want the script to perform backup every time it's fired, whatever script mode is set.
-:local forceBackup false;
-
-## Backup encryption password, no encryption if no password.
-:local backupPassword ""
-
-## If true, passwords will be included in exported config.
-:local sensetiveDataInConfig false;
-
-## Update channel. Possible values: stable, long-term, testing, development
+# Update channel. Possible values: stable, long-term, testing, development
 :local updateChannel "stable";
-
-## Install only patch versions of RouterOS updates.
-## Works only if you set scriptMode to "osupdate"
-## Means that new update will be installed only if MAJOR and MINOR version numbers remained the same as currently installed RouterOS.
-## Example: v6.43.6 => major.minor.PATCH
-## Script will send information if new version is greater than just patch.
+# Install only patch versions of RouterOS updates.
+# Works only if you set scriptMode to "osupdate"
+# Means that new update will be installed only if MAJOR and MINOR version numbers remained the same as currently installed RouterOS.
 :local installOnlyPatchUpdates	false;
+# (Example: v6.43.6 => major.minor.PATCH)
+# (Script will e-mail information if new version is greater than just patch.)
 
 ##------------------------------------------------------------------------------------------##
 #  !!!! DO NOT CHANGE ANYTHING BELOW THIS LINE, IF YOU ARE NOT SURE WHAT YOU ARE DOING !!!!  #
@@ -77,11 +88,14 @@
 
 :log info "\r\n$SMP script \"Mikrotik RouterOS automatic backup & update\" started.";
 :log info "$SMP Script Mode: $scriptMode, forceBackup: $forceBackup";
+:log info "$SMP backup to FTP: $backupToFtp, backup to E-mail: $backupToEmail";
 
 #Check proper email config
 :if ([:len $emailAddress] = 0 or [:len [/tool e-mail get address]] = 0 or [:len [/tool e-mail get from]] = 0) do={
-	:log error ("$SMP Email configuration is not correct, please check Tools -> Email. Script stopped.");   
-	:error "$SMP bye!";
+	:log warning ("$SMP Email configuration is not correct, please check Tools -> Email.");
+#	:error "$SMP bye!";
+# Set emailAddress to "" which will later indicate not to send any email.
+	:set emailAddress "";
 }
 
 #Check if proper identity name is set
@@ -187,6 +201,9 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 :global buGlobalVarUpdateStep;
 ############### ^^^^^^^^^ GLOBALS ^^^^^^^^^ ###############
 
+# For updates, we count how many 'external' storages (email, ftp) were successful. At least 1 is required for backup to proceed.
+:local storedBackupsCounter 0;
+
 # Counter for successfully uploaded files via FTP
 :local ftpUploadSuccess 0;
 
@@ -214,7 +231,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 :local mailBody 	 		"";
 
 :local mailBodyDeviceInfo	"\r\n\r\nDevice information: \r\nIdentity: $deviceIdentityName \r\nModel: $deviceRbModel \r\nSerial number: $deviceRbSerialNumber \r\nCurrent RouterOS: $deviceOsVerInst ($[/system package update get channel]) $[/system resource get build-time] \r\nCurrent routerboard FW: $deviceRbCurrentFw \r\nDevice uptime: $[/system resource get uptime]";
-:local mailBodyCopyright 	"\r\n\r\nMikrotik RouterOS automatic backup & update \r\nhttps://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update";
+:local mailBodyCopyright 	"\r\n\r\nMikrotik RouterOS automatic backup & update \r\nhttps://github.com/BrandonSk/Mikrotik-RouterOS-automatic-backup-and-update-With-FTP \r\n(forked from: https://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update)";
 :local changelogUrl			("Check RouterOS changelog: https://mikrotik.com/download/changelogs/" . $updateChannel . "-release-tree");
 
 :local backupName 			"$deviceIdentityName.$deviceRbModel.$deviceRbSerialNumber.v$deviceOsVerInst.$deviceUpdateChannel.$dateTime";
@@ -231,7 +248,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 }
 
 
-## 	STEP ONE: Creating backups, checking for new RouterOs version and sending email with backups,
+## 	STEP ONE: Creating backups, checking for new RouterOs version and storing backups,
 ## 	steps 2 and 3 are fired only if script is set to automatically update device and if new RouterOs is available.
 :if ($updateStep = 1) do={
 	:log info ("$SMP Performing the first step.");   
@@ -268,7 +285,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 		:set scriptMode "backup";
 	};
 
-	if ($forceBackup = true and $sendBackupToEmail = true) do={
+	if ($forceBackup = true and $backupToEmail = true) do={
 		# In this case the script will always send email, because it has to create backups
 		:set isSendEmailRequired true;
 	}
@@ -321,15 +338,15 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 
 		:set mailSubject	($mailSubject . " Backup was created.");
 		:set mailBody		($mailBody . "System backups were created ");
-		if ($sendBackupToEmail = true) do={
+		if ($backupToEmail = true) do={
 			:set mailBody		($mailBody . "and attached to this email");
 		}
-		if ($ftpBackupToFtp = true) do={
+		if ($backupToFtp = true) do={
 			:set mailBody		($mailBody . " and will be sent to FTP server.");
 		} else={
 			:set mailBody		($mailBody . ".");
 		}
-
+		:set mailBody	($mailBody . "\r\n\r\n$mailBodyDeviceInfo $mailBodyCopyright");
 		:set mailAttachments [$buGlobalFuncCreateBackups backupName=$backupNameFinal backupPassword=$backupPassword sensetiveDataInConfig=$sensetiveDataInConfig];
 	} else={
 		:log info ("$SMP There is no need to create a backup.");
@@ -372,7 +389,16 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 	:log info "$SMP The final email with report and backups of upgraded system will be sent in a minute.";
 	:delay 1m;
 	:set mailSubject	($mailSubject . " RouterOS Upgrade is completed, new version: v.$deviceOsVerInst!");
-	:set mailBody 	  	"RouterOS and routerboard upgrade process was completed. \r\nNew RouterOS version: v.$deviceOsVerInst, routerboard firmware: v.$deviceRbCurrentFw. \r\n$changelogUrl \r\n\r\nBackups of the upgraded system are in the attachment of this email.  $mailBodyDeviceInfo $mailBodyCopyright";
+	:set mailBody 	  	"RouterOS and routerboard upgrade process was completed. \r\nNew RouterOS version: v.$deviceOsVerInst, routerboard firmware: v.$deviceRbCurrentFw. \r\n$changelogUrl \r\n\r\nBackups of the upgraded system were created ";
+	if ($backupToEmail = true) do={
+		:set mailBody		($mailBody . "and attached to this email");
+	}
+	if ($backupToFtp = true) do={
+		:set mailBody		($mailBody . " and will be sent to FTP server.");
+	} else={
+		:set mailBody		($mailBody . ".");
+	}
+	:set mailBody	($mailBody . "\r\n\r\n$mailBodyDeviceInfo $mailBodyCopyright");
 	:set mailAttachments [$buGlobalFuncCreateBackups backupName=$backupNameAfterUpd backupPassword=$backupPassword sensetiveDataInConfig=$sensetiveDataInConfig];
 }
 
@@ -381,14 +407,19 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 :do {/system script environment remove buGlobalFuncCreateBackups;} on-error={}
 
 ##
-## UPLOAD VIA FTP
+## UPLOAD VIA (S)FTP
 ##
 # Try to upload backup files to FTP server
 
-:if ($ftpBackupToFtp = true) do={
+:if ($backupToFtp = true) do={
 	:log info "$SMP Trying to upload backup files to server $ftpAddress";
 	:foreach flnm in=$mailAttachments do={
-			:do {/tool fetch mode=ftp address="$ftpAddress" port="$ftpPort" user="$ftpUser" password="$ftpPass" src-path="$flnm" dst-path=("$ftpDest" . "$flnm") upload=yes;
+			:do {
+				if ($ftpUseSecure = true) do={
+					/tool fetch upload=yes url=("sftp://" . $ftpAddress . ":" . $ftpPort . "/" . $ftpDest . $flnm) src-path="$flnm" user="$ftpUser" password="$ftpPass";
+				} else {
+					/tool fetch mode=ftp address="$ftpAddress" port="$ftpPort" user="$ftpUser" password="$ftpPass" src-path="$flnm" dst-path=("$ftpDest" . "$flnm") upload=yes;
+				}
 			# Increase number of successfully uploaded files
 			:set ftpUploadSuccess	($ftpUploadSuccess +1);
 		} on-error={
@@ -400,6 +431,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 			:set mailBody 	  	($mailBody . "\r\n\r\nWARNING!\r\nBackups of the system failed to upload to FTP server.\r\n");
 		}
 	}
+	:if ($ftpUploadSuccess = 2) do={:set storedBackupsCounter ($storedBackupsCounter +1);}
 }
 
 ##
@@ -409,21 +441,18 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 
 :if ($isSendEmailRequired = true) do={
 	:log info "$SMP Sending email message, it will take around half a minute..."
-	:if ($sendBackupToEmail = true) do={
+	:if ($backupToEmail = true) do={
 		:do {/tool e-mail send to=$emailAddress subject=$mailSubject body=$mailBody file=$mailAttachments;
+			:set storedBackupsCounter ($storedBackupsCounter +1);
 		} on-error={
 			:delay 5s;
 			:log error "$SMP could not send email message ($[/tool e-mail get last-status]). Going to try it again in a while.";
 			:delay 5m;
 			:do {/tool e-mail send to=$emailAddress subject=$mailSubject body=$mailBody file=$mailAttachments;
+				:set storedBackupsCounter ($storedBackupsCounter +1);
 			} on-error={
 				:delay 5s;
 				:log error "$SMP could not send email message ($[/tool e-mail get last-status]) for the second time."
-	
-				if ($isOsNeedsToBeUpdated = true and $ftpBackupToFtp = false) do={
-					:set isOsNeedsToBeUpdated false;
-					:log warning "$SMP script is not going to initialise update process due to inability to send backups to email and FTP."
-				}
 			}
 		}
 	} else={
@@ -436,11 +465,6 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 			:do {/tool e-mail send to=$emailAddress subject=$mailSubject body=$mailBody;} on-error={
 				:delay 5s;
 				:log error "$SMP could not send email message ($[/tool e-mail get last-status]) for the second time."
-	
-				if ($ftpBackupToFtp = false) do={
-					:set isOsNeedsToBeUpdated false;
-					:log warning "$SMP script is not going to initialise update process due to inability to send backups to FTP."
-				}
 			}
 		}	
 	}
@@ -448,16 +472,15 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 	:delay 30s;
 
 # Cleanup will be performed if there are backup files AND at least one of the email or ftp upload had succeeded.
-	:if ([:len $mailAttachments] > 0 and ([/tool e-mail get last-status] = "succeeded" or ([:len $mailAttachments] = $ftpUploadSuccess))) do={
+	:if ($storedBackupsCounter > 0) do={
 		:log info "$SMP File system cleanup."
 		/file remove $mailAttachments; 
 		:delay 2s;
 	}
 }
 
-
 # Fire RouterOs update process
-if ($isOsNeedsToBeUpdated = true) do={
+if ($isOsNeedsToBeUpdated = true and $storedBackupsCounter > 0) do={
 
 	## Set scheduled task to upgrade routerboard firmware on the next boot, task will be deleted when upgrade is done. (That is why you should keep original script name)
 	/system schedule add name=BKPUPD-UPGRADE-ON-NEXT-BOOT on-event=":delay 5s; /system scheduler remove BKPUPD-UPGRADE-ON-NEXT-BOOT; :global buGlobalVarUpdateStep 2; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0;
@@ -465,6 +488,11 @@ if ($isOsNeedsToBeUpdated = true) do={
    :log info "$SMP everything is ready to install new RouterOS, going to reboot in a moment!"
 	## command is reincarnation of the "upgrade" command - doing exactly the same but under a different name
 	/system package update install;
+} else {
+	if ($isOsNeedsToBeUpdated = true) do {
+		:set isOsNeedsToBeUpdated false;
+		:log warning "$SMP script is not going to initialise update process due to inability to send backups to email and/or FTP."
+	}
 }
 
 :log info "$SMP script \"Mikrotik RouterOS automatic backup & update\" completed it's job.\r\n";
