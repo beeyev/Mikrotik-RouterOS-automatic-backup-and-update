@@ -2,6 +2,26 @@
 
 This script provides an ability to create Mikrotik's daily backups to email. You can also enable automatic RouterOS upgrade or leave only notifications about new firmware versions.
 
+# (S)FTP v2 fork
+
+## Added features:
+- Ability to store backups via FTP or SFTP
+#### New/Modified configuration options
+At the beginning of the file are added these variables:
+- backupToFtp -> set to true if you want to backup to FTP or SFTP server
+- backupToEmail -> set to true if you want to send backup files to email address
+- (you may use both options at the same time)
+
+FTP parameters:
+- ftpAddress 1.2.3.4 -> specify IP address of the (S)FTP server
+- ftpPort	-> set (S)FTP address port;
+- ftpUseSecure -> set to true if you want to use SFTP, otherwise FTP will be used.
+- ftpUser -> Set your FTP username
+- ftpPass -> Set your FTP user password
+- ftpDest -> Set path on your S(FTP) server. Must include trailing "/".
+
+### The rest of the original README:
+
 ## Features:
 - Ability to choose script operating mode according to your needs. *(Read below)*
 - Script creates backups of the whole system and exported config.
