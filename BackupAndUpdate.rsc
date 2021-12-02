@@ -88,7 +88,7 @@
 
 :log info "\r\n$SMP script \"Mikrotik RouterOS automatic backup & update\" started.";
 :log info "$SMP Script Mode: $scriptMode, forceBackup: $forceBackup";
-:log info "$SMP backup to FTP: $backupToFtp, backup to E-mail: $backupToEmail";
+:log info ("$SMP backup to FTP: " . [:tostr $backupToFtp] . ", backup to E-mail: " . [:tostr $backupToEmail] . ".");
 
 #Check proper email config
 :if ([:len $emailAddress] = 0 or [:len [/tool e-mail get address]] = 0 or [:len [/tool e-mail get from]] = 0) do={
