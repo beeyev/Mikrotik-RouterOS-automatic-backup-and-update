@@ -468,15 +468,14 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 			}
 		}	
 	}
-
 	:delay 30s;
+}
 
 # Cleanup will be performed if there are backup files AND at least one of the email or ftp upload had succeeded.
-	:if ($storedBackupsCounter > 0) do={
-		:log info "$SMP File system cleanup."
-		/file remove $mailAttachments; 
-		:delay 2s;
-	}
+:if ($storedBackupsCounter > 0) do={
+	:log info "$SMP File system cleanup."
+	/file remove $mailAttachments; 
+	:delay 2s;
 }
 
 # Fire RouterOs update process
