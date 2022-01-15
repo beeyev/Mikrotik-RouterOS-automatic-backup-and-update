@@ -3,9 +3,9 @@
 #----------SCRIPT INFORMATION---------------------------------------------------
 #
 # Script:  Mikrotik RouterOS automatic backup & update
-# Version: 21.09.27
+# Version: 22.01.16
 # Created: 07/08/2018
-# Updated: 27/09/2021
+# Updated: 16/01/2022
 # Author:  Alexander Tebiev
 # Website: https://github.com/beeyev
 # You can contact me by e-mail at tebiev@mail.com
@@ -24,7 +24,7 @@
 # osupdate 	- 	The Script will install a new RouterOS if it is available.
 #				It will also create backups before and after update process (does not matter what value is set to `forceBackup`)
 #				Email will be sent only if a new RouterOS version is available.
-#				Change parameter `forceBackup` if you need the script to create backups every time when it runs (even when no updates).
+#				Change parameter `forceBackup` if you need the script to create backups every time when it runs (even when no updates were found).
 #
 # osnotify 	- 	The script will send email notification only (without backups) if a new RouterOS is available.
 #				Change parameter `forceBackup` if you need the script to create backups every time when it runs.
@@ -131,6 +131,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 	:return $osVerNum;
 }
 
+
 # Function creates backups (system and config) and returns array with names
 # Possible arguments: 
 #	`backupName` 			| string	| backup file name, without extension!
@@ -155,14 +156,19 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 
 	## Export config file
 	:if ($sensetiveDataInConfig = true) do={
-		/export compact file=$backupName;
+		# since RouterOS v7 it needs to be set precise that we want to export sensitive data 
+		:if ($deviceOsVerInstNum < 70000) do={
+			:execute "/export compact file=$backupName";
+		} else={
+			:execute "/export compact show-sensitive file=$backupName";
+		}
 	} else={
 		/export compact hide-sensitive file=$backupName;
 	}
-	:log info ("$SMP Config file was exported. $backupFileConfig");   
+	:log info ("$SMP Config file was exported. $backupFileConfig, the script execution will be paused for a moment.");   
 
 	#Delay after creating backups
-	:delay 5s;	
+	:delay 20s;	
 	:return $backupNames;
 }
 
