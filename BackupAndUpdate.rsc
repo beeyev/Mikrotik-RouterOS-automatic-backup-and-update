@@ -3,9 +3,9 @@
 #----------SCRIPT INFORMATION---------------------------------------------------
 #
 # Script:  Mikrotik RouterOS automatic backup & update
-# Version: 22.01.16
+# Version: 22.01.17
 # Created: 07/08/2018
-# Updated: 16/01/2022
+# Updated: 17/01/2022
 # Author:  Alexander Tebiev
 # Website: https://github.com/beeyev
 # You can contact me by e-mail at tebiev@mail.com
@@ -28,7 +28,7 @@
 #
 # osnotify 	- 	The script will send email notification only (without backups) if a new RouterOS is available.
 #				Change parameter `forceBackup` if you need the script to create backups every time when it runs.
-:local scriptMode "backup";
+:local scriptMode "osupdate";
 
 ## Additional parameter if you set `scriptMode` to `osupdate` or `osnotify`
 # Set `true` if you want the script to perform backup every time it's fired, whatever script mode is set.
@@ -38,7 +38,7 @@
 :local backupPassword ""
 
 ## If true, passwords will be included in exported config.
-:local sensetiveDataInConfig false;
+:local sensetiveDataInConfig true;
 
 ## Update channel. Possible values: stable, long-term, testing, development
 :local updateChannel "stable";
@@ -156,14 +156,14 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 
 	## Export config file
 	:if ($sensetiveDataInConfig = true) do={
-		# since RouterOS v7 it needs to be set precise that we want to export sensitive data 
-		:if ($deviceOsVerInstNum < 70000) do={
-			:execute "/export compact file=$backupName";
+		# since RouterOS v7 it needs to be set precise that we want to export sensitive data
+		:if ([:pick [/system package update get installed-version] 0 1] < 7) do={
+			:execute "/export compact terse file=$backupName";
 		} else={
-			:execute "/export compact show-sensitive file=$backupName";
+			:execute "/export compact show-sensitive terse file=$backupName";
 		}
 	} else={
-		/export compact hide-sensitive file=$backupName;
+		/export compact hide-sensitive terse file=$backupName;
 	}
 	:log info ("$SMP Config file was exported. $backupFileConfig, the script execution will be paused for a moment.");   
 
@@ -174,6 +174,8 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 
 :global buGlobalVarUpdateStep;
 ############### ^^^^^^^^^ GLOBALS ^^^^^^^^^ ###############
+
+:local scriptVersion	"22.01.17";
 
 #Current date time in format: 2020jan15-221324 
 :local dateTime ([:pick [/system clock get date] 7 11] . [:pick [/system clock get date] 0 3] . [:pick [/system clock get date] 4 6] . "-" . [:pick [/system clock get time] 0 2] . [:pick [/system clock get time] 3 5] . [:pick [/system clock get time] 6 8]);
@@ -199,7 +201,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 :local mailBody 	 		"";
 
 :local mailBodyDeviceInfo	"\r\n\r\nDevice information: \r\nIdentity: $deviceIdentityName \r\nModel: $deviceRbModel \r\nSerial number: $deviceRbSerialNumber \r\nCurrent RouterOS: $deviceOsVerInst ($[/system package update get channel]) $[/system resource get build-time] \r\nCurrent routerboard FW: $deviceRbCurrentFw \r\nDevice uptime: $[/system resource get uptime]";
-:local mailBodyCopyright 	"\r\n\r\nMikrotik RouterOS automatic backup & update \r\nhttps://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update";
+:local mailBodyCopyright 	"\r\n\r\nMikrotik RouterOS automatic backup & update (ver. $scriptVersion) \r\nhttps://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update";
 :local changelogUrl			("Check RouterOS changelog: https://mikrotik.com/download/changelogs/" . $updateChannel . "-release-tree");
 
 :local backupName 			"$deviceIdentityName.$deviceRbModel.$deviceRbSerialNumber.v$deviceOsVerInst.$deviceUpdateChannel.$dateTime";
@@ -208,6 +210,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 
 :local backupNameFinal		$backupName;
 :local mailAttachments		[:toarray ""];
+
 
 :local updateStep $buGlobalVarUpdateStep;
 :do {/system script environment remove buGlobalVarUpdateStep;} on-error={}

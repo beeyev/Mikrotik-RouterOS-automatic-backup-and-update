@@ -2,6 +2,10 @@
 
 This script provides an ability to create Mikrotik's daily backups to email. You can also enable automatic RouterOS upgrade or leave only notifications about new firmware versions.
 
+
+> 💡 If you have any ideas about the script or you just want to share your opinion, you are welcome to [Discussions](https://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update/discussions), or you can open an [issue](https://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update/issues) if you found a bug.
+
+
 ## Features:
 - Ability to choose script operating mode according to your needs. *(Read below)*
 - Script creates backups of the whole system and exported config.
