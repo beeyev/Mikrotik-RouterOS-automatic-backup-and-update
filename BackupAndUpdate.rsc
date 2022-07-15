@@ -204,7 +204,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 :local mailBodyCopyright 	"\r\n\r\nMikrotik RouterOS automatic backup & update (ver. $scriptVersion) \r\nhttps://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update";
 :local changelogUrl			("Check RouterOS changelog: https://mikrotik.com/download/changelogs/" . $updateChannel . "-release-tree");
 
-:local backupName 			"$deviceIdentityName.$deviceRbModel.$deviceRbSerialNumber.v$deviceOsVerInst.$deviceUpdateChannel.$dateTime";
+:local backupName 		"v$deviceOsVerInst_$deviceUpdateChannel_$dateTime";
 :local backupNameBeforeUpd	"backup_before_update_$backupName";
 :local backupNameAfterUpd	"backup_after_update_$backupName";
 
