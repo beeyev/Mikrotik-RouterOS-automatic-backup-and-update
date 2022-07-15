@@ -3,9 +3,9 @@
 #----------SCRIPT INFORMATION---------------------------------------------------
 #
 # Script:  Mikrotik RouterOS automatic backup & update
-# Version: 22.01.17
+# Version: 22.07.15
 # Created: 07/08/2018
-# Updated: 17/01/2022
+# Updated: 15/07/2022
 # Author:  Alexander Tebiev
 # Website: https://github.com/beeyev
 # You can contact me by e-mail at tebiev@mail.com
