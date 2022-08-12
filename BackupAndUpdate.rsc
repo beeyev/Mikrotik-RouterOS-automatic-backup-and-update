@@ -334,7 +334,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 		:delay 5s;
 		:log info "$SMP routerboard upgrade process was completed, going to reboot in a moment!";
 		## Set scheduled task to send final report on the next boot, task will be deleted when is is done. (That is why you should keep original script name)
-		/system schedule add name=BKPUPD-FINAL-REPORT-ON-NEXT-BOOT on-event=":delay 5s; /system scheduler remove BKPUPD-FINAL-REPORT-ON-NEXT-BOOT; :global buGlobalVarUpdateStep 3; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0;
+		/system scheduler add name=BKPUPD-FINAL-REPORT-ON-NEXT-BOOT on-event=":delay 5s; /system scheduler remove BKPUPD-FINAL-REPORT-ON-NEXT-BOOT; :global buGlobalVarUpdateStep 3; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0;
 		## Reboot system to boot with new firmware
 		/system reboot;
 	} else={
@@ -399,7 +399,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 if ($isOsNeedsToBeUpdated = true) do={
 
 	## Set scheduled task to upgrade routerboard firmware on the next boot, task will be deleted when upgrade is done. (That is why you should keep original script name)
-	/system schedule add name=BKPUPD-UPGRADE-ON-NEXT-BOOT on-event=":delay 5s; /system scheduler remove BKPUPD-UPGRADE-ON-NEXT-BOOT; :global buGlobalVarUpdateStep 2; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0;
+	/system scheduler add name=BKPUPD-UPGRADE-ON-NEXT-BOOT on-event=":delay 5s; /system scheduler remove BKPUPD-UPGRADE-ON-NEXT-BOOT; :global buGlobalVarUpdateStep 2; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0;
    
    :log info "$SMP everything is ready to install new RouterOS, going to reboot in a moment!"
 	## command is reincarnation of the "upgrade" command - doing exactly the same but under a different name
