@@ -28,12 +28,12 @@ This script provides an ability to create Mikrotik's daily backups to email. You
 ##### 1. Configure parameters
 Take the  [script](https://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update/raw/master/BackupAndUpdate.rsc) and configure it's parameters at the begining of the file.  
 This is not difficult because all parameters are well commented.  
-**Imprtant!** Don't forget to provide correct email address for backups and pay attention a `scriptMode` variable.
+**Important!** Don't forget to provide correct email address for backups and pay attention a `scriptMode` variable.
 
 ##### 2. Create new script
 System -> Scripts [Add]  
 
-**Imprtant!** Script name has to be `BackupAndUpdate`   
+**Important!** Script name has to be `BackupAndUpdate`   
 Put the script which you configured earlier into the source area.  
 ![](https://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update/raw/master/howto/script-name.png)  
 
