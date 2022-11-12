@@ -3,9 +3,9 @@
 #----------SCRIPT INFORMATION---------------------------------------------------
 #
 # Script:  Mikrotik RouterOS automatic backup & update
-# Version: 22.07.15
+# Version: 22.11.12
 # Created: 07/08/2018
-# Updated: 15/07/2022
+# Updated: 12/11/2022
 # Author:  Alexander Tebiev
 # Website: https://github.com/beeyev
 # You can contact me by e-mail at tebiev@mail.com
@@ -175,22 +175,36 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 :global buGlobalVarUpdateStep;
 ############### ^^^^^^^^^ GLOBALS ^^^^^^^^^ ###############
 
-:local scriptVersion	"22.07.15";
+:local scriptVersion	"22.11.12";
 
 #Current date time in format: 2020jan15-221324 
 :local dateTime ([:pick [/system clock get date] 7 11] . [:pick [/system clock get date] 0 3] . [:pick [/system clock get date] 4 6] . "-" . [:pick [/system clock get time] 0 2] . [:pick [/system clock get time] 3 5] . [:pick [/system clock get time] 6 8]);
+
+:local isSoftBased false;
+:if ([/system resource get board-name] = "CHR" or [/system resource get board-name] = "x86") do={
+	:set isSoftBased true;
+}
 
 :local deviceOsVerInst 			[/system package update get installed-version];
 :local deviceOsVerInstNum 		[$buGlobalFuncGetOsVerNum paramOsVer=$deviceOsVerInst];
 :local deviceOsVerAvail 		"";
 :local deviceOsVerAvailNum 		0;
-:local deviceRbModel			[/system routerboard get model];
-:local deviceRbSerialNumber 	[/system routerboard get serial-number];
-:local deviceRbCurrentFw 		[/system routerboard get current-firmware];
-:local deviceRbUpgradeFw 		[/system routerboard get upgrade-firmware];
 :local deviceIdentityName 		[/system identity get name];
 :local deviceIdentityNameShort 	[:pick $deviceIdentityName 0 18]
 :local deviceUpdateChannel 		[/system package update get channel];
+
+
+:local deviceRbModel			"CloudHostedRouter";
+:local deviceRbSerialNumber 	"--";
+:local deviceRbCurrentFw 		"--";
+:local deviceRbUpgradeFw 		"--";
+
+:if ($isSoftBased = false) do={
+	:set deviceRbModel			[/system routerboard get model];
+	:set deviceRbSerialNumber 	[/system routerboard get serial-number];
+	:set deviceRbCurrentFw 		[/system routerboard get current-firmware];
+	:set deviceRbUpgradeFw 		[/system routerboard get upgrade-firmware];
+};
 
 :local isOsUpdateAvailable 	false;
 :local isOsNeedsToBeUpdated	false;
@@ -289,7 +303,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 			if ($isOsNeedsToBeUpdated = true) do={
 				:log info ("$SMP New RouterOS is going to be installed! v.$deviceOsVerInst -> v.$deviceOsVerAvail");
 				:set mailSubject	($mailSubject . " New RouterOS is going to be installed! v.$deviceOsVerInst -> v.$deviceOsVerAvail.");
-				:set mailBody 		($mailBody . "Your Mikrotik will be updated to the new RouterOS version from v.$deviceOsVerInst to v.$deviceOsVerAvail (Update channel: $updateChannel) \r\nFinal report with the detailed information will be sent when update process is completed. \r\nIf you have not received second email in the next 5 minutes, then probably something went wrong. (Check your device logs)");
+				:set mailBody 		($mailBody . "Your Mikrotik will be updated to the new RouterOS version from v.$deviceOsVerInst to v.$deviceOsVerAvail (Update channel: $updateChannel) \r\nFinal report with the detailed information will be sent when update process is completed. \r\nIf you have not received second email in the next 10 minutes, then probably something went wrong. (Check your device logs)");
 				#!! There is more code connected to this part and first step at the end of the script.
 			}
 		
@@ -398,10 +412,16 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 # Fire RouterOs update process
 if ($isOsNeedsToBeUpdated = true) do={
 
-	## Set scheduled task to upgrade routerboard firmware on the next boot, task will be deleted when upgrade is done. (That is why you should keep original script name)
-	/system scheduler add name=BKPUPD-UPGRADE-ON-NEXT-BOOT on-event=":delay 5s; /system scheduler remove BKPUPD-UPGRADE-ON-NEXT-BOOT; :global buGlobalVarUpdateStep 2; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0;
+	:if ($isSoftBased = false) do={
+		## Set scheduled task to upgrade routerboard firmware on the next boot, task will be deleted when upgrade is done. (That is why you should keep original script name)
+		/system scheduler add name=BKPUPD-UPGRADE-ON-NEXT-BOOT on-event=":delay 5s; /system scheduler remove BKPUPD-UPGRADE-ON-NEXT-BOOT; :global buGlobalVarUpdateStep 2; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0;
+	} else= {
+		## If the scrip is executed on CHR, step 2 will be skipped
+		/system scheduler add name=BKPUPD-UPGRADE-ON-NEXT-BOOT on-event=":delay 5s; /system scheduler remove BKPUPD-UPGRADE-ON-NEXT-BOOT; :global buGlobalVarUpdateStep 3; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0;
+	};
+	
    
-   :log info "$SMP everything is ready to install new RouterOS, going to reboot in a moment!"
+	:log info "$SMP everything is ready to install new RouterOS, going to reboot in a moment!"
 	## command is reincarnation of the "upgrade" command - doing exactly the same but under a different name
 	/system package update install;
 }
