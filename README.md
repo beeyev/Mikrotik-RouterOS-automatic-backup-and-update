@@ -66,7 +66,7 @@ You will see the script working process in the log window. If the script finishe
 
 ## Contributors
 
- - [DJ5KP](mailto:dj5kp@dj5kp.de), website: [dj5kp.de](http://dj5kp.de/)
+ - DJ5KP, website: [dj5kp.de](http://dj5kp.de/)
 
 ## License
 
