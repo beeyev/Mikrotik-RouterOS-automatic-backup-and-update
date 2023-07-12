@@ -21,12 +21,12 @@
 ## Script mode, possible values: backup, osupdate, osnotify.
 # backup    -   Only backup will be performed. (default value, if none provided)
 #
-# osupdate  -   The Script will install a new RouterOS if it is available.
-#               It will also create backups before and after update process (does not matter what value is set to `forceBackup`)
+# osupdate  -   The script will install a new RouterOS version if it is available.
+#               It will also create backups before and after update process (it does not matter what value `forceBackup` is set to)
 #               Email will be sent only if a new RouterOS version is available.
 #               Change parameter `forceBackup` if you need the script to create backups every time when it runs (even when no updates were found).
 #
-# osnotify  -   The script will send email notification only (without backups) if a new RouterOS is available.
+# osnotify  -   The script will send email notifications only (without backups) if a new RouterOS update is available.
 #               Change parameter `forceBackup` if you need the script to create backups every time when it runs.
 :local scriptMode "osupdate";
 
@@ -38,7 +38,7 @@
 :local backupPassword ""
 
 ## If true, passwords will be included in exported config.
-:local sensetiveDataInConfig true;
+:local sensitiveDataInConfig true;
 
 ## Update channel. Possible values: stable, long-term, testing, development
 :local updateChannel "stable";
@@ -76,7 +76,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 # Possible arguments: paramOsVer
 # Example:
 # :put [$buGlobalFuncGetOsVerNum paramOsVer=[/system routerboard get current-RouterOS]];
-# result will be: 64301, because current RouterOS version is: 6.43.1
+# Result will be: 64301, because current RouterOS version is: 6.43.1
 :global buGlobalFuncGetOsVerNum do={
     :local osVer $paramOsVer;
     :local osVerNum;
@@ -136,7 +136,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 # Possible arguments:
 #    `backupName`               | string    | backup file name, without extension!
 #    `backupPassword`           | string    |
-#    `sensetiveDataInConfig`    | boolean   |
+#    `sensitiveDataInConfig`    | boolean   |
 # Example:
 # :put [$buGlobalFuncCreateBackups name="daily-backup"];
 :global buGlobalFuncCreateBackups do={
@@ -155,8 +155,8 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
     :log info ("$SMP System backup created. $backupFileSys");
 
     ## Export config file
-    :if ($sensetiveDataInConfig = true) do={
-        # since RouterOS v7 it needs to be set precise that we want to export sensitive data
+    :if ($sensitiveDataInConfig = true) do={
+        # Since RouterOS v7 it needs to be explicitly set that we want to export sensitive data
         :if ([:pick [/system package update get installed-version] 0 1] < 7) do={
             :execute "/export compact terse file=$backupName";
         } else={
@@ -177,7 +177,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 
 :local scriptVersion "22.11.12";
 
-#Current date time in format: 2020jan15-221324
+#Current date time in format: yyyymmmdd-hhMMss. E.g. 2020jan15-221324
 :local dateTime ([:pick [/system clock get date] 7 11] . [:pick [/system clock get date] 0 3] . [:pick [/system clock get date] 4 6] . "-" . [:pick [/system clock get time] 0 2] . [:pick [/system clock get time] 3 5] . [:pick [/system clock get time] 6 8]);
 
 :local isSoftBased false;
@@ -234,7 +234,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 
 
 ## STEP ONE: Creating backups, checking for new RouterOs version and sending email with backups,
-## steps 2 and 3 are fired only if script is set to automatically update device and if new RouterOs is available.
+## Steps 2 and 3 are fired only if script is set to automatically update device and if a new RouterOs version is available.
 :if ($updateStep = 1) do={
     :log info ("$SMP Performing the first step.");
 
@@ -246,7 +246,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
         :delay 5s;
         :set deviceOsVerAvail [/system package update get latest-version];
 
-        # If there is a problem getting information about available RouterOS from server
+        # If there is a problem getting information about available RouterOS versions from server
         :if ([:len $deviceOsVerAvail] = 0) do={
             :log warning ("$SMP There is a problem getting information about new RouterOS from server.");
             :set mailSubject    ($mailSubject . " Error: No data about new RouterOS!")
@@ -275,18 +275,18 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
         :set isSendEmailRequired true;
     }
 
-    # if new OS version is available to install
+    # If a new OS version is available to install
     if ($isOsUpdateAvailable = true and $isSendEmailRequired = true) do={
-        # If we only need to notify about new available version
+        # If we only need to notify about a new available version
         if ($scriptMode = "osnotify") do={
             :set mailSubject    ($mailSubject . " New RouterOS is available! v.$deviceOsVerAvail.")
             :set mailBody       ($mailBody . "New RouterOS version is available to install: v.$deviceOsVerAvail ($updateChannel) \r\n$changelogUrl")
         }
 
-        # if we need to initiate RouterOs update process
+        # If we need to initiate RouterOS update process
         if ($scriptMode = "osupdate") do={
             :set isOsNeedsToBeUpdated true;
-            # if we need to install only patch updates
+            # If we need to install only patch updates
             :if ($installOnlyPatchUpdates = true) do={
                 #Check if Major and Minor builds are the same.
                 :if ([:pick $deviceOsVerInstNum 0 ([:len $deviceOsVerInstNum]-2)] = [:pick $deviceOsVerAvailNum 0 ([:len $deviceOsVerAvailNum]-2)]) do={
@@ -324,17 +324,17 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
         :set mailSubject    ($mailSubject . " Backup was created.");
         :set mailBody       ($mailBody . "System backups were created and attached to this email.");
 
-        :set mailAttachments [$buGlobalFuncCreateBackups backupName=$backupNameFinal backupPassword=$backupPassword sensetiveDataInConfig=$sensetiveDataInConfig];
+        :set mailAttachments [$buGlobalFuncCreateBackups backupName=$backupNameFinal backupPassword=$backupPassword sensitiveDataInConfig=$sensitiveDataInConfig];
     } else={
         :log info ("$SMP There is no need to create a backup.");
     }
 
-    # Combine fisrst step email
+    # Combine first step email
     :set mailBody ($mailBody . $mailBodyDeviceInfo . $mailBodyCopyright);
 }
 
 ## STEP TWO: (after first reboot) routerboard firmware upgrade
-## steps 2 and 3 are fired only if script is set to automatically update device and if new RouterOs is available.
+## Steps 2 and 3 are fired only if script is set to automatically update device and if new RouterOs is available.
 :if ($updateStep = 2) do={
     :log info ("$SMP Performing the second step.");
     ## RouterOS is the latest, let's check for upgraded routerboard firmware
@@ -358,7 +358,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 }
 
 ## STEP THREE: Last step (after second reboot) sending final report
-## steps 2 and 3 are fired only if script is set to automatically update device and if new RouterOs is available.
+## Steps 2 and 3 are fired only if script is set to automatically update device and if new RouterOs is available.
 :if ($updateStep = 3) do={
     :log info ("$SMP Performing the third step.");
     :log info "Bkp&Upd: RouterOS and routerboard upgrade process was completed. New RouterOS version: v.$deviceOsVerInst, routerboard firmware: v.$deviceRbCurrentFw.";
@@ -367,7 +367,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
     :delay 1m;
     :set mailSubject    ($mailSubject . " RouterOS Upgrade is completed, new version: v.$deviceOsVerInst!");
     :set mailBody       "RouterOS and routerboard upgrade process was completed. \r\nNew RouterOS version: v.$deviceOsVerInst, routerboard firmware: v.$deviceRbCurrentFw. \r\n$changelogUrl \r\n\r\nBackups of the upgraded system are in the attachment of this email.  $mailBodyDeviceInfo $mailBodyCopyright";
-    :set mailAttachments [$buGlobalFuncCreateBackups backupName=$backupNameAfterUpd backupPassword=$backupPassword sensetiveDataInConfig=$sensetiveDataInConfig];
+    :set mailAttachments [$buGlobalFuncCreateBackups backupName=$backupNameAfterUpd backupPassword=$backupPassword sensitiveDataInConfig=$sensitiveDataInConfig];
 }
 
 # Remove functions from global environment to keep it fresh and clean.
@@ -377,7 +377,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 ##
 ## SENDING EMAIL
 ##
-# Trying to send email with backups in attachment.
+# Trying to send email with backups as attachments.
 
 :if ($isSendEmailRequired = true) do={
     :log info "$SMP Sending email message, it will take around half a minute...";
@@ -409,20 +409,20 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 }
 
 
-# Fire RouterOs update process
+# Fire RouterOS update process
 if ($isOsNeedsToBeUpdated = true) do={
 
     :if ($isSoftBased = false) do={
         ## Set scheduled task to upgrade routerboard firmware on the next boot, task will be deleted when upgrade is done. (That is why you should keep original script name)
         /system scheduler add name=BKPUPD-UPGRADE-ON-NEXT-BOOT on-event=":delay 5s; /system scheduler remove BKPUPD-UPGRADE-ON-NEXT-BOOT; :global buGlobalVarUpdateStep 2; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0;
     } else= {
-        ## If the scrip is executed on CHR, step 2 will be skipped
+        ## If the script is executed on CHR, step 2 will be skipped
         /system scheduler add name=BKPUPD-UPGRADE-ON-NEXT-BOOT on-event=":delay 5s; /system scheduler remove BKPUPD-UPGRADE-ON-NEXT-BOOT; :global buGlobalVarUpdateStep 3; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0;
     };
 
 
     :log info "$SMP everything is ready to install new RouterOS, going to reboot in a moment!"
-    ## command is reincarnation of the "upgrade" command - doing exactly the same but under a different name
+    ## Command is reincarnation of the "upgrade" command - doing exactly the same but under a different name
     /system package update install;
 }
 
