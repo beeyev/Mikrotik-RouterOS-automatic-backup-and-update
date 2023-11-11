@@ -3,9 +3,9 @@
 #----------SCRIPT INFORMATION---------------------------------------------------
 #
 # Script:  Mikrotik RouterOS automatic backup & update
-# Version: 22.11.12
+# Version: 23.11.11
 # Created: 07/08/2018
-# Updated: 12/11/2022
+# Updated: 11/11/2023
 # Author:  Alexander Tebiev
 # Website: https://github.com/beeyev
 # You can contact me by e-mail at tebiev@mail.com
@@ -60,11 +60,28 @@
 :log info "\r\n$SMP script \"Mikrotik RouterOS automatic backup & update\" started.";
 :log info "$SMP Script Mode: $scriptMode, forceBackup: $forceBackup";
 
-#Check proper email config
-:if ([:len $emailAddress] = 0 or [:len [/tool e-mail get address]] = 0 or [:len [/tool e-mail get from]] = 0) do={
-    :log error ("$SMP Email configuration is not correct, please check Tools -> Email. Script stopped.");
+# Check email settings
+:if ([:len $emailAddress] = 0) do={
+    :log error ("$SMP \$emailAddress variable is empty. Script stopped.");
     :error "$SMP bye!";
 }
+:local emailServer ""
+:do {
+    :set emailServer [/tool e-mail get server];
+} on-error={
+    # Old of getting email server before the RouterOS v7.12
+    :log info "$SMP Checking email server using old command `/tool e-mail get address`";
+    :set emailServer [/tool e-mail get address];
+}
+:if ($emailServer = "0.0.0.0") do={
+    :log error ("$SMP Email server address is not correct, please check Tools -> Email. Script stopped.");
+    :error "$SMP bye!";
+}
+:if ([:len [/tool e-mail get from]] = 0 or [/tool e-mail get from] = "<>") do={
+    :log error ("$SMP Email configuration FROM address is not correct, please check Tools -> Email. Script stopped.");
+    :error "$SMP bye!";
+}
+
 
 #Check if proper identity name is set
 if ([:len [/system identity get name]] = 0 or [/system identity get name] = "MikroTik") do={
@@ -175,15 +192,25 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 :global buGlobalVarUpdateStep;
 ############### ^^^^^^^^^ GLOBALS ^^^^^^^^^ ###############
 
-:local scriptVersion "22.11.12";
+:local scriptVersion "23.11.11";
 
-#Current date time in format: yyyymmmdd-hhMMss. E.g. 2020jan15-221324
-:local dateTime ([:pick [/system clock get date] 7 11] . [:pick [/system clock get date] 0 3] . [:pick [/system clock get date] 4 6] . "-" . [:pick [/system clock get time] 0 2] . [:pick [/system clock get time] 3 5] . [:pick [/system clock get time] 6 8]);
+# Current time `hh-mm-ss`
+:local currentTime ([:pick [/system clock get time] 0 2] . "-" . [:pick [/system clock get time] 3 5] . "-" . [:pick [/system clock get time] 6 8]);
+
+:local currentDateTime ("-" . $currentTime);
+
+# Detect old date format, Example: `nov/11/2023`
+:if ([:len [:tonum [:pick [/system clock get date] 0 1]]] = 0) do={
+    :set currentDateTime ([:pick [/system clock get date] 7 11] . [:pick [/system clock get date] 0 3] . [:pick [/system clock get date] 4 6] . "-" . $currentTime);
+} else={
+    # New date format, Example: `2023-11-11`
+    :set currentDateTime ([/system clock get date] . "-" . $currentTime);
+};
 
 :local isSoftBased false;
 :if ([/system resource get board-name] = "CHR" or [/system resource get board-name] = "x86") do={
     :set isSoftBased true;
-}
+};
 
 :local deviceOsVerInst          [/system package update get installed-version];
 :local deviceOsVerInstNum       [$buGlobalFuncGetOsVerNum paramOsVer=$deviceOsVerInst];
@@ -218,7 +245,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 :local mailBodyCopyright    "\r\n\r\nMikrotik RouterOS automatic backup & update (ver. $scriptVersion) \r\nhttps://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update";
 :local changelogUrl         ("Check RouterOS changelog: https://mikrotik.com/download/changelogs/" . $updateChannel . "-release-tree");
 
-:local backupName           "v$deviceOsVerInst_$deviceUpdateChannel_$dateTime";
+:local backupName           "v$deviceOsVerInst_$deviceUpdateChannel_$currentDateTime";
 :local backupNameBeforeUpd  "backup_before_update_$backupName";
 :local backupNameAfterUpd   "backup_after_update_$backupName";
 
