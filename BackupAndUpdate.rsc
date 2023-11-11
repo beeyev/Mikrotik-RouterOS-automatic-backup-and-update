@@ -3,9 +3,9 @@
 #----------SCRIPT INFORMATION---------------------------------------------------
 #
 # Script:  Mikrotik RouterOS automatic backup & update
-# Version: 22.11.12
+# Version: 23.11.11
 # Created: 07/08/2018
-# Updated: 12/11/2022
+# Updated: 11/11/2023
 # Author:  Alexander Tebiev
 # Website: https://github.com/beeyev
 # You can contact me by e-mail at tebiev@mail.com
@@ -173,14 +173,12 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 
     ## Export config file
     :if ($sensitiveDataInConfig = true) do={
-        :do {
-            # Since RouterOS v7 it needs to be explicitly set that we want to export sensitive data
-            /export compact show-sensitive terse file=$backupName;
-        } on-error={
-            :log info "$SMP Exporting config file with sensitive data using old way `/export compact terse file`";
-            /export compact terse file=$backupName;
+        # Since RouterOS v7 it needs to be explicitly set that we want to export sensitive data
+        :if ([:pick [/system package update get installed-version] 0 1] < 7) do={
+            :execute "/export compact terse file=$backupName";
+        } else={
+            :execute "/export compact show-sensitive terse file=$backupName";
         }
-
     } else={
         /export compact hide-sensitive terse file=$backupName;
     }
@@ -194,19 +192,18 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 :global buGlobalVarUpdateStep;
 ############### ^^^^^^^^^ GLOBALS ^^^^^^^^^ ###############
 
-:local scriptVersion "22.11.12";
+:local scriptVersion "23.11.11";
 
-# Current time `hhMMss`
-:local currentTime ([:pick [/system clock get time] 0 2] . [:pick [/system clock get time] 3 5] . [:pick [/system clock get time] 6 8]);
+# Current time `hh-mm-ss`
+:local currentTime ([:pick [/system clock get time] 0 2] . "-" . [:pick [/system clock get time] 3 5] . "-" . [:pick [/system clock get time] 6 8]);
 
 :local currentDateTime ("-" . $currentTime);
 
 # Detect old date format, Example: `nov/11/2023`
 :if ([:len [:tonum [:pick [/system clock get date] 0 1]]] = 0) do={
     :set currentDateTime ([:pick [/system clock get date] 7 11] . [:pick [/system clock get date] 0 3] . [:pick [/system clock get date] 4 6] . "-" . $currentTime);
-}
-# New date format, Example: `nov/11/2023`
-else={
+} else={
+    # New date format, Example: `2023-11-11`
     :set currentDateTime ([/system clock get date] . "-" . $currentTime);
 };
 
