@@ -294,9 +294,11 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
             }
         }
 
-        # Always truncate the string for safety measures
-        :set publicIpAddress ([:pick $publicIpAddress 0 15])
-        :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\r\nPublic IP address: " . $publicIpAddress);
+        :if ($detectPublicIpAddress = true) do={
+            # Always truncate the string for safety measures
+            :set publicIpAddress ([:pick $publicIpAddress 0 15])
+            :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\r\nPublic IP address: " . $publicIpAddress);
+        }
     }
 }
 
