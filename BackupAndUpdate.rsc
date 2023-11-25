@@ -53,8 +53,8 @@
 ## If true, device public IP address information will be included into the email message
 :local detectPublicIpAddress true;
 
-## Only anonymous information, such as script mode, device model, and OS version, will be collected.
-:local allowAnonymousTelemetryCollection true;
+## Allow anonymous statistics collection. (script mode, device model, OS version)
+:local allowAnonymousStatisticsCollection true;
 
 ##------------------------------------------------------------------------------------------##
 #  !!!! DO NOT CHANGE ANYTHING BELOW THIS LINE, IF YOU ARE NOT SURE WHAT YOU ARE DOING !!!!  #
@@ -273,12 +273,12 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 ## IP address detection & anonymous telemetry
 :if ($updateStep = 1 or $updateStep = 3) do={
     :if ($updateStep = 3) do={
-        :log info ("$SMP Waiting for one minute before continue the final step.");
+        :log info ("$SMP Waiting for one minute before continuing to the final step.");
         :delay 1m;
     }
 
-    :if ($detectPublicIpAddress = true or $allowAnonymousTelemetryCollection = true) do={
-        :if ($allowAnonymousTelemetryCollection = true) do={
+    :if ($detectPublicIpAddress = true or $allowAnonymousStatisticsCollection = true) do={
+        :if ($allowAnonymousStatisticsCollection = true) do={
             :set telemetryDataQuery ("\?mode=" . $scriptMode . "&osver=" . $deviceOsVerInst . "&model=" . $deviceRbModel);
         }
 
