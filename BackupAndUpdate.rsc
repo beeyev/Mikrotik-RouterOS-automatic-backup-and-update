@@ -16,7 +16,7 @@
 #----------MODIFY THIS SECTION AS NEEDED----------------------------------------
 ## Notification e-mail
 ## (Make sure you have configurated Email settings in Tools -> Email)
-:local emailAddress "zzt.tzz@gmail.com";
+:local emailAddress "yourmail@example.com";
 
 ## Script mode, possible values: backup, osupdate, osnotify.
 # backup    -   Only backup will be performed. (default value, if none provided)
