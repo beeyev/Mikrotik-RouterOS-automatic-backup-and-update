@@ -16,7 +16,7 @@
 #----------MODIFY THIS SECTION AS NEEDED----------------------------------------
 ## Notification e-mail
 ## (Make sure you have configurated Email settings in Tools -> Email)
-:local emailAddress "yourmail@example.com";
+:local emailAddress "zzt.tzz@gmail.com";
 
 ## Script mode, possible values: backup, osupdate, osnotify.
 # backup    -   Only backup will be performed. (default value, if none provided)
@@ -270,7 +270,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
     :set updateStep 1;
 }
 
-## IP address detection & anonymous telemetry
+## IP address detection & anonymous statistics collection
 :if ($updateStep = 1 or $updateStep = 3) do={
     :if ($updateStep = 3) do={
         :log info ("$SMP Waiting for one minute before continuing to the final step.");
