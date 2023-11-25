@@ -3,9 +3,9 @@
 #----------SCRIPT INFORMATION---------------------------------------------------
 #
 # Script:  Mikrotik RouterOS automatic backup & update
-# Version: 23.11.11
+# Version: 23.11.25
 # Created: 07/08/2018
-# Updated: 11/11/2023
+# Updated: 25/11/2023
 # Author:  Alexander Tebiev
 # Website: https://github.com/beeyev
 # You can contact me by e-mail at tebiev@mail.com
@@ -49,6 +49,12 @@
 ## Example: v6.43.6 => major.minor.PATCH
 ## Script will send information if new version is greater than just patch.
 :local installOnlyPatchUpdates false;
+
+## If true, device public IP address information will be included into the email message
+:local detectPublicIpAddress true;
+
+## Only anonymous information, such as script mode, device model, and OS version, will be collected.
+:local allowAnonymousTelemetryCollection true;
 
 ##------------------------------------------------------------------------------------------##
 #  !!!! DO NOT CHANGE ANYTHING BELOW THIS LINE, IF YOU ARE NOT SURE WHAT YOU ARE DOING !!!!  #
@@ -192,7 +198,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 :global buGlobalVarUpdateStep;
 ############### ^^^^^^^^^ GLOBALS ^^^^^^^^^ ###############
 
-:local scriptVersion "23.11.11";
+:local scriptVersion "23.11.25";
 
 # Current time `hh-mm-ss`
 :local currentTime ([:pick [/system clock get time] 0 2] . "-" . [:pick [/system clock get time] 3 5] . "-" . [:pick [/system clock get time] 6 8]);
@@ -253,10 +259,45 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 :local mailAttachments  [:toarray ""];
 
 
+:local ipAddressDetectServiceDefault "https://ipv4.mikrotik.ovh/"
+:local ipAddressDetectServiceFallback "https://api.ipify.org/"
+:local publicIpAddress "not detected";
+:local telemetryDataQuery "";
+
 :local updateStep $buGlobalVarUpdateStep;
 :do {/system script environment remove buGlobalVarUpdateStep;} on-error={}
 :if ([:len $updateStep] = 0) do={
     :set updateStep 1;
+}
+
+## IP address detection & anonymous telemetry
+:if ($updateStep = 1 or $updateStep = 3) do={
+    :if ($updateStep = 3) do={
+        :log info ("$SMP Waiting for one minute before continue the final step.");
+        :delay 1m;
+    }
+
+    :if ($detectPublicIpAddress = true or $allowAnonymousTelemetryCollection = true) do={
+        :if ($allowAnonymousTelemetryCollection = true) do={
+            :set telemetryDataQuery ("\?mode=" . $scriptMode . "&osver=" . $deviceOsVerInst . "&model=" . $deviceRbModel);
+        }
+
+        :do {:set publicIpAddress ([/tool fetch http-method="get" url=($ipAddressDetectServiceDefault . $telemetryDataQuery) output=user as-value]->"data");} on-error={
+
+            :if ($detectPublicIpAddress = true) do={
+                :log warning "$SMP Could not detect public IP address using default detection service."
+                :log warning "$SMP Trying to detect public ip using fallback detection service."
+
+                :do {:set publicIpAddress ([/tool fetch http-method="get" url=$ipAddressDetectServiceFallback output=user as-value]->"data");} on-error={
+                    :log warning "$SMP Could not detect public IP address using fallback detection service."
+                }
+            }
+        }
+
+        # Always truncate the string for safety measures
+        :set publicIpAddress ([:pick $publicIpAddress 0 15])
+        :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\r\nPublic IP address: " . $publicIpAddress);
+    }
 }
 
 
@@ -330,7 +371,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
             if ($isOsNeedsToBeUpdated = true) do={
                 :log info           ("$SMP New RouterOS is going to be installed! v.$deviceOsVerInst -> v.$deviceOsVerAvail");
                 :set mailSubject    ($mailSubject . " New RouterOS is going to be installed! v.$deviceOsVerInst -> v.$deviceOsVerAvail.");
-                :set mailBody       ($mailBody . "Your Mikrotik will be updated to the new RouterOS version from v.$deviceOsVerInst to v.$deviceOsVerAvail (Update channel: $updateChannel) \r\nFinal report with the detailed information will be sent when update process is completed. \r\nIf you have not received second email in the next 10 minutes, then probably something went wrong. (Check your device logs)");
+                :set mailBody       ($mailBody . "Your Mikrotik will be updated to the new RouterOS version from v.$deviceOsVerInst to v.$deviceOsVerAvail (Update channel: $updateChannel) \r\nA final report with detailed information will be sent once the update process is completed. \r\nIf you do not receive a second email within the next 10 minutes, there may be an issue. Please check your device logs for further information.");
                 #!! There is more code connected to this part and first step at the end of the script.
             }
 
@@ -386,12 +427,12 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 
 ## STEP THREE: Last step (after second reboot) sending final report
 ## Steps 2 and 3 are fired only if script is set to automatically update device and if new RouterOs is available.
+## This step is executed after some delay
 :if ($updateStep = 3) do={
     :log info ("$SMP Performing the third step.");
     :log info "Bkp&Upd: RouterOS and routerboard upgrade process was completed. New RouterOS version: v.$deviceOsVerInst, routerboard firmware: v.$deviceRbCurrentFw.";
     ## Small delay in case mikrotik needs some time to initialize connections
-    :log info "$SMP The final email with report and backups of upgraded system will be sent in a minute.";
-    :delay 1m;
+    :log info "$SMP Sending the final email with report and backups.";
     :set mailSubject    ($mailSubject . " RouterOS Upgrade is completed, new version: v.$deviceOsVerInst!");
     :set mailBody       "RouterOS and routerboard upgrade process was completed. \r\nNew RouterOS version: v.$deviceOsVerInst, routerboard firmware: v.$deviceRbCurrentFw. \r\n$changelogUrl \r\n\r\nBackups of the upgraded system are in the attachment of this email.  $mailBodyDeviceInfo $mailBodyCopyright";
     :set mailAttachments [$buGlobalFuncCreateBackups backupName=$backupNameAfterUpd backupPassword=$backupPassword sensitiveDataInConfig=$sensitiveDataInConfig];
