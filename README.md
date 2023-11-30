@@ -1,20 +1,19 @@
 # Mikrotik RouterOS automatic backup and update
 
-This script provides an ability to create Mikrotik's daily backups to email. You can also enable automatic RouterOS upgrade or leave only notifications about new firmware versions.
+This script allows you to generate daily backups of MikroTik and send them to an email address. You can also choose to enable automatic RouterOS upgrades or receive notifications exclusively for new firmware versions.
 
 
 > 💡 If you have any ideas about the script or you just want to share your opinion, you are welcome to [Discussions](https://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update/discussions), or you can open an [issue](https://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update/issues) if you found a bug.
 
 
 ## Features:
-- Ability to choose script operating mode according to your needs. *(Read below)*
-- Script creates backups of the whole system and exported config.
-- You can set a preferred update channel.
-- If automatic updates are enabled, you can set script to install only patch versions of RouterOS updates. *This means if the current RouterOS version is v6.43.6, the script will automatically install v6.43.7 (new patch version) but not v6.44.0 (new minor version), for example.*
-- Script includes primary information about the device into the email message. So you can easily find the backup you need among multiple devices.
-- For safety purposes, an automatic update process will not be started if script could not send backups to email.
-- Routerboard firmware can be automatically upgraded according to the installed RouterOS version.
-
+- Choose the script's operating mode based on your specific requirements. (See details below)
+- The script generates backups of the entire system and exports the configuration.
+- Customize your preferred update channel.
+- When automatic updates are enabled, you can configure the script to install only patch versions of RouterOS updates. *For example, if the current RouterOS version is v6.43.6, the script will automatically install v6.43.7 (a new patch version) but not v6.44.0 (a new minor version).*
+- The script includes essential device information into the email message, making it easy to identify the required backup among multiple devices.
+- As a safety measure, the automatic update process will not initiate if the script is unable to send backups via email.
+- Routerboard firmware can be upgraded automatically based on the installed RouterOS version.
 
 ## Script operating modes:
 **Backups only** - script creates system and config backups and sends them to specified email as an attachment. Using email account as storage for your backups.  
