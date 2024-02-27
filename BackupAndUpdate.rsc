@@ -417,7 +417,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
         ## Wait until the upgrade is completed
         :delay 5s;
         :log info "$SMP routerboard upgrade process was completed, going to reboot in a moment!";
-        ## Set scheduled task to send final report on the next boot, task will be deleted when is is done. (That is why you should keep original script name)
+        ## Set scheduled task to send final report on the next boot, task will be deleted when it is done. (That is why you should keep original script name)
         /system scheduler add name=BKPUPD-FINAL-REPORT-ON-NEXT-BOOT on-event=":delay 5s; /system scheduler remove BKPUPD-FINAL-REPORT-ON-NEXT-BOOT; :global buGlobalVarUpdateStep 3; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0;
         ## Reboot system to boot with new firmware
         /system reboot;
