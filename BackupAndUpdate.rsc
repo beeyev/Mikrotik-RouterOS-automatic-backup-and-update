@@ -450,7 +450,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 # Trying to send email with backups as attachments.
 
 :if ($isSendEmailRequired = true) do={
-    :log info "$SMP Sending email message, it will take around half a minute...";
+    :log info "$SMP Dispatching email message; estimated completion within 30 seconds.";
     :do {/tool e-mail send to=$emailAddress subject=$mailSubject body=$mailBody file=$mailAttachments;} on-error={
         :delay 5s;
         :log error "$SMP could not send email message ($[/tool e-mail get last-status]). Will attempt redelivery shortly."
@@ -459,7 +459,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 
         :do {/tool e-mail send to=$emailAddress subject=$mailSubject body=$mailBody file=$mailAttachments;} on-error={
             :delay 5s;
-            :log error "$SMP could not send email message ($[/tool e-mail get last-status]) for the second time."
+            :log error "$SMP failed to send email message ($[/tool e-mail get last-status]) for the second time."
 
             if ($isOsNeedsToBeUpdated = true) do={
                 :set isOsNeedsToBeUpdated false;
