@@ -22,7 +22,7 @@ This script allows you to generate daily backups of MikroTik and send them to an
 
 ## How to use
 > ❗️ **Important**  
-> Make sure that your device identity does not contain any spaces or specific symbols! `System -> Identity`
+> Ensure your device identity is free from spaces and special characters! `System -> Identity`
 
 ##### 1. Configure parameters
 Take the  [script](https://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update/raw/master/BackupAndUpdate.rsc) and configure it's parameters at the begining of the file.  
