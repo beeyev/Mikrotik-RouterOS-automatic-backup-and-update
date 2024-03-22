@@ -422,7 +422,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
         ## Reboot system to boot with new firmware
         /system reboot;
     } else={
-        :log info "$SMP It appers that your routerboard is already up to date, skipping this step.";
+        :log info "$SMP It appears that your routerboard is already up to date, skipping this step.";
         :set updateStep 3;
     };
 }
@@ -453,7 +453,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
     :log info "$SMP Sending email message, it will take around half a minute...";
     :do {/tool e-mail send to=$emailAddress subject=$mailSubject body=$mailBody file=$mailAttachments;} on-error={
         :delay 5s;
-        :log error "$SMP could not send email message ($[/tool e-mail get last-status]). Going to try it again in a while."
+        :log error "$SMP could not send email message ($[/tool e-mail get last-status]). Will attempt redelivery shortly."
 
         :delay 5m;
 
