@@ -7,12 +7,12 @@ This script allows you to generate daily backups of MikroTik and send them to an
 
 
 ## Features:
-- Choose the script's operating mode based on your specific requirements. (See details below)
-- The script generates backups of the entire system and exports the configuration.
-- Customize your preferred update channel.
-- When automatic updates are enabled, you can configure the script to install only patch versions of RouterOS updates. *For example, if the current RouterOS version is v6.43.6, the script will automatically install v6.43.7 (a new patch version) but not v6.44.0 (a new minor version).*
-- The script includes essential device information into the email message, making it easy to identify the required backup among multiple devices.
-- As a safety measure, the automatic update process will not initiate if the script is unable to send backups via email.
+- Select the script's operational mode according to your specific needs (details provided below). 
+- This script is designed to create full system backups and export configurations. 
+- Customize the update channel according to your preference. 
+- With automatic updates activated, the script can be set to apply only patch updates for RouterOS. For instance, should the current RouterOS version be v6.43.6, the script will autonomously upgrade to v6.43.7 (a patch update), while avoiding v6.44.0 (a minor update).*
+- The script also incorporates vital device details in the email alerts, facilitating easy identification of the necessary backup among several devices. 
+- For added security, the script is programmed to stop the automatic update process if it fails to dispatch backups via email. 
 - Routerboard firmware can be upgraded automatically based on the installed RouterOS version.
 
 ## Script operating modes:
