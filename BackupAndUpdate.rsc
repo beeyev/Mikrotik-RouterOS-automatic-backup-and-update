@@ -43,7 +43,7 @@
 ## Update channel. Possible values: stable, long-term, testing, development
 :local updateChannel "stable";
 
-## Install only patch versions of RouterOS updates.
+## Installs only patch versions of RouterOS updates.
 ## Works only if you set scriptMode to "osupdate"
 ## Means that new update will be installed only if MAJOR and MINOR version numbers remained the same as currently installed RouterOS.
 ## Example: v6.43.6 => major.minor.PATCH
@@ -341,7 +341,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
     };
 
     if ($forceBackup = true) do={
-        # In this case the script will always send email, because it has to create backups
+        # In this case the script will always send an email, because it has to create backups
         :set isSendEmailRequired true;
     }
 
@@ -396,7 +396,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 
         :set mailAttachments [$buGlobalFuncCreateBackups backupName=$backupNameFinal backupPassword=$backupPassword sensitiveDataInConfig=$sensitiveDataInConfig];
     } else={
-        :log info ("$SMP There is no need to create a backup.");
+        :log info ("$SMP Creating a backup is not necessary.");
     }
 
     # Combine first step email
