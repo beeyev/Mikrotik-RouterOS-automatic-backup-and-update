@@ -63,16 +63,18 @@ When everything is done, you need to make sure that the script is working correc
 To do so, open a New Terminal and Log window in your WinBox, then run the script manually by executing this command `/system script run BackupAndUpdate;` in Terminal.  
 You will see the script working process in the log window. If the script finished without errors, check your email, there is a fresh message with backups from your MikroTik waiting for you 🎉
 
-## Contributors
-
+## Acknowledgements
+I would like to extend my sincere gratitude to the following individuals who have contributed to this project:
  - DJ5KP, website: [dj5kp.de](http://dj5kp.de/)
+
+Special thanks to the talented people who are working at [MikroTik](https://mikrotik.com) for their contributions in creating such outstanding products.
 
 ## License
 
 The MIT License (MIT). Please see [License File](LICENSE.md) for more information.
 
 ---
-If you love this project, please consider giving me a ⭐
+If you love this project, please buy more mikrotiks ;) and consider giving me a ⭐
 
 [__Buy me a coffee! :coffee:__](https://www.buymeacoffee.com/beeyev)
 
