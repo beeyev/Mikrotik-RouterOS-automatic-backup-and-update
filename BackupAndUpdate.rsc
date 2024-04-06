@@ -43,7 +43,7 @@
 ## Update channel. Possible values: stable, long-term, testing, development
 :local updateChannel "stable";
 
-## Install only patch versions of RouterOS updates.
+## Installs only patch versions of RouterOS updates.
 ## Works only if you set scriptMode to "osupdate"
 ## Means that new update will be installed only if MAJOR and MINOR version numbers remained the same as currently installed RouterOS.
 ## Example: v6.43.6 => major.minor.PATCH
@@ -341,7 +341,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
     };
 
     if ($forceBackup = true) do={
-        # In this case the script will always send email, because it has to create backups
+        # In this case the script will always send an email, because it has to create backups
         :set isSendEmailRequired true;
     }
 
@@ -396,7 +396,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 
         :set mailAttachments [$buGlobalFuncCreateBackups backupName=$backupNameFinal backupPassword=$backupPassword sensitiveDataInConfig=$sensitiveDataInConfig];
     } else={
-        :log info ("$SMP There is no need to create a backup.");
+        :log info ("$SMP Creating a backup is not necessary.");
     }
 
     # Combine first step email
@@ -417,12 +417,12 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
         ## Wait until the upgrade is completed
         :delay 5s;
         :log info "$SMP routerboard upgrade process was completed, going to reboot in a moment!";
-        ## Set scheduled task to send final report on the next boot, task will be deleted when is is done. (That is why you should keep original script name)
+        ## Set scheduled task to send final report on the next boot, task will be deleted when it is done. (That is why you should keep original script name)
         /system scheduler add name=BKPUPD-FINAL-REPORT-ON-NEXT-BOOT on-event=":delay 5s; /system scheduler remove BKPUPD-FINAL-REPORT-ON-NEXT-BOOT; :global buGlobalVarUpdateStep 3; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0;
         ## Reboot system to boot with new firmware
         /system reboot;
     } else={
-        :log info "$SMP It appers that your routerboard is already up to date, skipping this step.";
+        :log info "$SMP It appears that your routerboard is already up to date, skipping this step.";
         :set updateStep 3;
     };
 }
@@ -450,16 +450,16 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 # Trying to send email with backups as attachments.
 
 :if ($isSendEmailRequired = true) do={
-    :log info "$SMP Sending email message, it will take around half a minute...";
+    :log info "$SMP Dispatching email message; estimated completion within 30 seconds.";
     :do {/tool e-mail send to=$emailAddress subject=$mailSubject body=$mailBody file=$mailAttachments;} on-error={
         :delay 5s;
-        :log error "$SMP could not send email message ($[/tool e-mail get last-status]). Going to try it again in a while."
+        :log error "$SMP could not send email message ($[/tool e-mail get last-status]). Will attempt redelivery shortly."
 
         :delay 5m;
 
         :do {/tool e-mail send to=$emailAddress subject=$mailSubject body=$mailBody file=$mailAttachments;} on-error={
             :delay 5s;
-            :log error "$SMP could not send email message ($[/tool e-mail get last-status]) for the second time."
+            :log error "$SMP failed to send email message ($[/tool e-mail get last-status]) for the second time."
 
             if ($isOsNeedsToBeUpdated = true) do={
                 :set isOsNeedsToBeUpdated false;
