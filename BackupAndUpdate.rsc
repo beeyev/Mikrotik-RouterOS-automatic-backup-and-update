@@ -214,7 +214,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 };
 
 :local isSoftBased false;
-:if ([/system resource get board-name] = "CHR" or [/system resource get board-name] = "x86") do={
+:if ([:pick [/system resource get board-name] 0 3] = "CHR" or [/system resource get board-name] = "x86") do={
     :set isSoftBased true;
 };
 
