@@ -3,9 +3,9 @@
 #----------SCRIPT INFORMATION---------------------------------------------------
 #
 # Script:  Mikrotik RouterOS automatic backup & update
-# Version: 23.11.25
+# Version: 24.06.04
 # Created: 07/08/2018
-# Updated: 25/11/2023
+# Updated: 04/06/2024
 # Author:  Alexander Tebiev
 # Website: https://github.com/beeyev
 # You can contact me by e-mail at tebiev@mail.com
@@ -214,7 +214,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 };
 
 :local isSoftBased false;
-:if ([/system resource get board-name] = "CHR" or [/system resource get board-name] = "x86") do={
+:if ([:pick [/system resource get board-name] 0 3] = "CHR" or [/system resource get board-name] = "x86") do={
     :set isSoftBased true;
 };
 
