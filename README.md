@@ -38,7 +38,7 @@ Insert the script which you configured earlier into the source area.
 
 ##### 3. Configure mail server
 Tools -> Email  
-Configure your email server parameters. If you don't have one, i recommend using the [smtp2go.com](https://smtp2go.com "smtp2go.com") service, which allows sending a thousand emails per month for free.
+Configure your email server parameters. If you don't have one, i recommend using the [smtp2go.com](https://smtp2go.com "smtp2go.com") service, which allows sending a thousand emails per month for free.  
 ![](https://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update/raw/master/howto/email-config.png)  
 
 To check email settings, send a test message by running the following command in terminal:
