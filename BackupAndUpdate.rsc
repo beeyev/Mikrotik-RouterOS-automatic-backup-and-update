@@ -198,7 +198,7 @@ if ([:len [/system identity get name]] = 0 or [/system identity get name] = "Mik
 :global buGlobalVarUpdateStep;
 ############### ^^^^^^^^^ GLOBALS ^^^^^^^^^ ###############
 
-:local scriptVersion "23.11.25";
+:local scriptVersion "24.06.04";
 
 # Current time `hh-mm-ss`
 :local currentTime ([:pick [/system clock get time] 0 2] . "-" . [:pick [/system clock get time] 3 5] . "-" . [:pick [/system clock get time] 6 8]);
