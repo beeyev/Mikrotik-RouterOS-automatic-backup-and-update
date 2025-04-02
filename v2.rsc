@@ -68,21 +68,83 @@
 
 :local scriptVersion "24.06.04";
 
-# Current time `hh-mm-ss`
-:local currentTime ([:pick [/system clock get time] 0 2] . "-" . [:pick [/system clock get time] 3 5] . "-" . [:pick [/system clock get time] 6 8]);
+###########
 
-# Current date `YYYY-MM-DD`, will be defined later in the script
+# Get current system time and date
+:local rawTime [/system clock get time]
+:local rawDate [/system clock get date]
+
+# Current time in specific format `hh-mm-ss`
+:local currentTime ([:pick $rawTime 0 2] . "-" . [:pick $rawTime 3 5] . "-" . [:pick $rawTime 6 8])
+
+# Current date `YYYY-MM-DD` or `YYYY-Mon-DD`, will be defined later in the script
 :local currentDate "undefined";
 
-# Checking if the date is in the old format with slashes and month name (e.g., `nov/11/2023`)
-:if ([:len [:tonum [:pick [/system clock get date] 0 1]]] = 0) do={
-    # Convert the old date format
-    # Example: `nov/11/2023` to `2023-nov-11`
-    :set currentDate ([:pick [/system clock get date] 7 11] . "-" . [:pick [/system clock get date] 0 3] . "-" . [:pick [/system clock get date] 4 6]);
+# Check if the date is in the old format, it should not start with a number
+:if ([:len [:tonum [:pick $rawDate 0 1]]] = 0) do={
+    # Convert old format `nov/11/2023` → `2023-nov-11`
+    :set currentDate ([:pick $rawDate 7 11] . "-" . [:pick $rawDate 0 3] . "-" . [:pick $rawDate 4 6])
 } else={
-    # getting current date in the new format (e.g., `2023-11-11`)
-    :set currentDate [/system clock get date];
-};
+    # Use new format as is `YYYY-MM-DD`
+    :set currentDate $rawDate
+}
 
-# current date and time in the format `YYYY-MM-DD-hh-mm-ss` or `YYYY-Mon-11-hh-mm-ss`
-:local currentDateTime ($currentDate . "-" . $currentTime);
+# Combine date and time → `YYYY-MM-DD-hh-mm-ss` or `YYYY-Mon-11-hh-mm-ss`
+:local currentDateTime ($currentDate . "-" . $currentTime)
+
+:local isSoftBased false
+:local boardName [/system resource get board-name]
+
+# Check if board name contains "CHR" or starts with "x86"
+:if ([:len [:find $boardName "CHR"]] > 0 or [:pick $boardName 0 3] = "x86") do={
+    :set isSoftBased true
+}
+
+
+############### vvvvvvvvv GLOBALS vvvvvvvvv ###############
+# Function converts standard mikrotik build versions to the number.
+# Possible arguments: paramOsVer
+# Example:
+# :put [$buGlobalFuncGetOsVerNum paramOsVer="6.49.2"]
+# :put [$buGlobalFuncGetOsVerNum paramOsVer=[/system routerboard get current-firmware]]
+# Result will be: 64301, because current RouterOS version is: 6.43.1
+:global buGlobalFuncGetOsVerNum do={
+    :local osVer $paramOsVer
+    :local allowedChars "0123456789."
+    :local i 0
+    :local c ""
+
+    if ([:len $osVer] < 3 or [:len $osVer] > 10) do={
+        :error ("Bkp&Upd: getOsVerNum: invalid version string length, given version: `$osVer`")
+    }
+
+    # validate that each character is a digit or a dot
+	:for i from=0 to=([:len $osVer] - 1) do={
+		:set c [:pick $osVer $i]
+		:if ([:len [:find $allowedChars $c]] = 0) do={
+			:error ("Bkp&Upd: invalid version string, invalid character: `$c`, given version: `$osVer`")
+		}
+	}
+
+    :local major ""
+    :local minor "00"
+    :local patch "00"
+
+    :if ([:find $osVer "."] >= 0) do={
+        :set major [:pick $osVer 0 [:find $osVer "."]]
+        :local rest [:pick $osVer ([:find $osVer "."] + 1) [:len $osVer]]
+
+        :if ([:find $rest "."] >= 0) do={
+            :set minor [:pick $rest 0 [:find $rest "."]]
+            :set patch [:pick $rest ([:find $rest "."] + 1) [:len $rest]]
+        } else={
+            :set minor $rest
+        }
+    } else={:set major $osVer}
+
+    :if ([:len $minor] = 1) do={:set minor ("0" . $minor)}
+
+    :if ([:len $patch] = 1) do={:set patch ("0" . $patch)}
+
+    :return ($major . $minor . $patch)
+}
