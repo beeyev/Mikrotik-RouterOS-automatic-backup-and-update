@@ -102,27 +102,34 @@
 
 
 ############### vvvvvvvvv GLOBALS vvvvvvvvv ###############
-# Function converts standard mikrotik build versions to the number.
+# Function converts standard mikrotik build versions intto the number.
 # Possible arguments: paramOsVer
 # Example:
-# :put [$buGlobalFuncGetOsVerNum paramOsVer="6.49.2"]
+# :put [$buGlobalFuncGetOsVerNum paramOsVer="6.49.2"] # Result will be: 64902
 # :put [$buGlobalFuncGetOsVerNum paramOsVer=[/system routerboard get current-firmware]]
-# Result will be: 64301, because current RouterOS version is: 6.43.1
 :global buGlobalFuncGetOsVerNum do={
+    #Script messages prefix
+    :local SMP "Bkp&Upd:"
+    :log info ("$SMP global function buGlobalFuncGetOsVerNum started. Input: `$paramOsVer`")
+
     :local osVer $paramOsVer
     :local allowedChars "0123456789."
     :local i 0
     :local c ""
 
     if ([:len $osVer] < 3 or [:len $osVer] > 10) do={
-        :error ("Bkp&Upd: getOsVerNum: invalid version string length, given version: `$osVer`")
+        :local errMesg "$SMP getOsVerNum: invalid version string length, given version: `$osVer`"
+        :log error $errMesg
+        :error $errMesg
     }
 
     # validate that each character is a digit or a dot
 	:for i from=0 to=([:len $osVer] - 1) do={
 		:set c [:pick $osVer $i]
 		:if ([:len [:find $allowedChars $c]] = 0) do={
-			:error ("Bkp&Upd: invalid version string, invalid character: `$c`, given version: `$osVer`")
+            :local errMesg "$SMP invalid version string, invalid character: `$c`, given version: `$osVer`"
+            :log error $errMesg
+            :error $errMesg
 		}
 	}
 
@@ -146,5 +153,71 @@
 
     :if ([:len $patch] = 1) do={:set patch ("0" . $patch)}
 
-    :return ($major . $minor . $patch)
+    :local result ($major . $minor . $patch)
+
+    :log info ("$SMP global function buGlobalFuncGetOsVerNum finished. Result: `$result`")
+
+    :return $result
 }
+
+
+
+# Function creates backups (system and config) and returns array of names of created files.
+# Possible arguments:
+#    `backupName`               | string    | backup file name, without extension!
+#    `backupPassword`           | string    |
+#    `sensitiveDataInConfig`    | boolean   |
+# Example:
+# :put [$buGlobalFuncCreateBackups backupName="daily-backup"]
+:global buGlobalFuncCreateBackups do={
+    #Script messages prefix
+    :local SMP "Bkp&Upd:"
+    :log info ("$SMP global function `buGlobalFuncCreateBackups` started, input: `$backupName`")
+
+    # validate required parameter: backupName
+    :if ([:typeof $backupName] != "str" or [:len $backupName] = 0) do={
+        :local errMesg "$SMP parameter 'backupName' is required and must be a non-empty string"
+        :log error $errMesg
+        :error $errMesg
+    } 
+
+    :local backupFileSys "$backupName.backup";
+    :local backupFileConfig "$backupName.rsc";
+    :local backupNames {$backupFileSys;$backupFileConfig};
+
+    ## Perform system backup
+    :if ([:len $backupPassword] = 0) do={
+        :log info ("$SMP starting backup without password, backup name: `$backupName`")
+        /system backup save dont-encrypt=yes name=$backupName
+    } else={
+        :log info ("$SMP starting backup with password, backup name: `$backupName`")
+        /system backup save password=$backupPassword name=$backupName
+    }
+
+    :log info ("$SMP system backup created: `$backupFileSys`")
+
+      ## Export config file
+    :if ($sensitiveDataInConfig = true) do={
+        :log info ("$SMP starting export config with sensitive data, backup name: `$backupName`")
+        # Since RouterOS v7 it needs to be explicitly set that we want to export sensitive data
+        :if ([:pick [/system package update get installed-version] 0 1] < 7) do={
+            :execute "/export compact terse file=$backupName";
+        } else={
+            :execute "/export compact show-sensitive terse file=$backupName";
+        }
+    } else={
+        :log info ("$SMP starting export config without sensitive data, backup name: `$backupName`")
+        /export compact hide-sensitive terse file=$backupName;
+    }
+    
+    :log info ("$SMP Config export complete: `$backupFileConfig`")
+    :log info ("$SMP Waiting a little to ensure file is written")
+
+    :delay 20s
+
+    :log info ("$SMP global function `buGlobalFuncCreateBackups` finished. Created backups: `$backupNames`")
+
+    :return $backupNames
+}
+
+############### ^^^^^^^^^ GLOBALS ^^^^^^^^^ ###############
