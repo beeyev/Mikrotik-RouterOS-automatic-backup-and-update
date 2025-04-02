@@ -64,7 +64,7 @@
 :local SMP "Bkp&Upd:"
 
 :log info "\n$SMP script \"Mikrotik RouterOS automatic backup & update\" started.";
-:log info "$SMP Script Mode: $scriptMode, forceBackup: $forceBackup";
+:log info "$SMP Script Mode: `$scriptMode`, forceBackup: `$forceBackup`";
 
 :local scriptVersion "24.06.04";
 
@@ -117,7 +117,7 @@
     :local i 0
     :local c ""
 
-    if ([:len $osVer] < 3 or [:len $osVer] > 10) do={
+    if ([:len $osVer] < 1 or [:len $osVer] > 10) do={
         :local errMesg "$SMP getOsVerNum: invalid version string length, given version: `$osVer`"
         :log error $errMesg
         :error $errMesg
@@ -218,4 +218,55 @@
     :return $backupNames
 }
 
+# Global variable to track current update step
+:global buGlobalVarUpdateStep;
 ############### ^^^^^^^^^ GLOBALS ^^^^^^^^^ ###############
+
+:local mailBodyDeviceInfo   "\n\nDevice information: \nIdentity: $deviceIdentityName \nModel: $deviceRbModel \nSerial number: $deviceRbSerialNumber \nCurrent RouterOS: $deviceOsVerInst ($[/system package update get channel]) $[/system resource get build-time] \nCurrent routerboard FW: $deviceRbCurrentFw \nDevice uptime: $[/system resource get uptime]"
+
+:local ipAddressDetectServiceDefault "https://ipv4.mikrotik.ovh/"
+:local ipAddressDetectServiceFallback "https://api.ipify.org/"
+:local publicIpAddress "not-detected";
+:local telemetryDataQuery "";
+
+:local updateStep $buGlobalVarUpdateStep;
+:do {/system script environment remove buGlobalVarUpdateStep;} on-error={}
+:if ([:len $updateStep] = 0) do={
+    :set updateStep 1;
+}
+
+## IP address detection & anonymous statistics collection
+:if ($updateStep = 1 or $updateStep = 3) do={
+    :if ($updateStep = 3) do={
+        :log info ("$SMP Waiting for one minute before continuing to the final step.");
+        :delay 1m;
+    }
+
+    :if ($detectPublicIpAddress = true or $allowAnonymousStatisticsCollection = true) do={
+        :if ($allowAnonymousStatisticsCollection = true) do={
+            :set telemetryDataQuery ("\?mode=" . $scriptMode . "&osver=" . $deviceOsVerInst . "&model=" . $deviceRbModel);
+        }
+
+        :do {:set publicIpAddress ([/tool fetch http-method="get" url=($ipAddressDetectServiceDefault . $telemetryDataQuery) output=user as-value]->"data");} on-error={
+
+            :if ($detectPublicIpAddress = true) do={
+                :log warning "$SMP Could not detect public IP address using default detection service: `$ipAddressDetectServiceDefault`"
+                :log warning "$SMP Trying to detect public ip using fallback detection service: `$ipAddressDetectServiceFallback`"
+
+                :do {:set publicIpAddress ([/tool fetch http-method="get" url=$ipAddressDetectServiceFallback output=user as-value]->"data");} on-error={
+                    :log warning "$SMP Could not detect public IP address using fallback detection service: `$ipAddressDetectServiceFallback`"
+                }
+            }
+        }
+
+        :if ($detectPublicIpAddress = true) do={
+            # Always truncate the string for safety measures
+            :set publicIpAddress ([:pick $publicIpAddress 0 15])
+            :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nPublic IP address: $publicIpAddress");
+        }
+    }
+}
+
+# Remove functions from global environment to keep it fresh and clean.
+:do {/system script environment remove buGlobalFuncGetOsVerNum;} on-error={}
+:do {/system script environment remove buGlobalFuncCreateBackups;} on-error={}
