@@ -160,8 +160,6 @@
     :return $result
 }
 
-
-
 # Function creates backups (system and config) and returns array of names of created files.
 # Possible arguments:
 #    `backupName`               | string    | backup file name, without extension!
