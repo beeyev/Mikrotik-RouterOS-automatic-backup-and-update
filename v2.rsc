@@ -16,7 +16,7 @@
 #----------MODIFY THIS SECTION AS NEEDED----------------------------------------
 ## Notification e-mail
 ## (Make sure you have configured Email settings in Tools -> Email)
-:local emailAddress "zzt.tzz@gmail.com";
+:local emailAddress "zzt.tzz@gmail.com"
 
 ## Script mode, possible values: backup, osupdate, osnotify.
 # backup    -   Only backup will be performed. (default value, if none provided)
@@ -28,33 +28,33 @@
 #
 # osnotify  -   The script will send email notifications only (without backups) if a new RouterOS update is available.
 #               Change parameter `forceBackup` if you need the script to create backups every time when it runs.
-:local scriptMode "osupdate";
+:local scriptMode "osupdate"
 
 ## Additional parameter if you set `scriptMode` to `osupdate` or `osnotify`
 # Set `true` if you want the script to perform backup every time its fired, whatever script mode is set.
-:local forceBackup false;
+:local forceBackup false
 
 ## Backup encryption password, no encryption if no password.
-:local backupPassword "";
+:local backupPassword ""
 
 ## If true, passwords will be included in exported config.
-:local sensitiveDataInConfig true;
+:local sensitiveDataInConfig true
 
 ## Update channel. Possible values: stable, long-term, testing, development
-:local updateChannel "stable";
+:local updateChannel "stable"
 
 ## Installs only patch versions of RouterOS updates.
 ## Works only if you set scriptMode to "osupdate"
 ## Means that new update will be installed only if MAJOR and MINOR version numbers remained the same as currently installed RouterOS.
 ## Example: v6.43.6 => major.minor.PATCH
 ## Script will send information if new version is greater than just patch.
-:local installOnlyPatchUpdates false;
+:local installOnlyPatchUpdates false
 
 ## If true, device public IP address information will be included into the email message
-:local detectPublicIpAddress true;
+:local detectPublicIpAddress true
 
 ## Allow anonymous statistics collection. (script mode, device model, OS version)
-:local allowAnonymousStatisticsCollection true;
+:local allowAnonymousStatisticsCollection true
 
 ##------------------------------------------------------------------------------------------##
 #  !!!! DO NOT CHANGE ANYTHING BELOW THIS LINE, IF YOU ARE NOT SURE WHAT YOU ARE DOING !!!!  #
@@ -63,10 +63,10 @@
 #Script messages prefix
 :local SMP "Bkp&Upd:"
 
-:log info "\n$SMP script \"Mikrotik RouterOS automatic backup & update\" started.";
-:log info "$SMP Script Mode: `$scriptMode`, forceBackup: `$forceBackup`";
+:log info "\n$SMP script \"Mikrotik RouterOS automatic backup & update\" started."
+:log info "$SMP Script Mode: `$scriptMode`, forceBackup: `$forceBackup`"
 
-:local scriptVersion "24.06.04";
+:local scriptVersion "24.06.04"
 
 ###########
 
@@ -78,7 +78,7 @@
 :local currentTime ([:pick $rawTime 0 2] . "-" . [:pick $rawTime 3 5] . "-" . [:pick $rawTime 6 8])
 
 # Current date `YYYY-MM-DD` or `YYYY-Mon-DD`, will be defined later in the script
-:local currentDate "undefined";
+:local currentDate "undefined"
 
 # Check if the date is in the old format, it should not start with a number
 :if ([:len [:tonum [:pick $rawDate 0 1]]] = 0) do={
@@ -179,9 +179,9 @@
         :error $errMesg
     } 
 
-    :local backupFileSys "$backupName.backup";
-    :local backupFileConfig "$backupName.rsc";
-    :local backupNames {$backupFileSys;$backupFileConfig};
+    :local backupFileSys "$backupName.backup"
+    :local backupFileConfig "$backupName.rsc"
+    :local backupNames {$backupFileSys;$backupFileConfig}
 
     ## Perform system backup
     :if ([:len $backupPassword] = 0) do={
@@ -199,13 +199,13 @@
         :log info ("$SMP starting export config with sensitive data, backup name: `$backupName`")
         # Since RouterOS v7 it needs to be explicitly set that we want to export sensitive data
         :if ([:pick [/system package update get installed-version] 0 1] < 7) do={
-            :execute "/export compact terse file=$backupName";
+            :execute "/export compact terse file=$backupName"
         } else={
-            :execute "/export compact show-sensitive terse file=$backupName";
+            :execute "/export compact show-sensitive terse file=$backupName"
         }
     } else={
         :log info ("$SMP starting export config without sensitive data, backup name: `$backupName`")
-        /export compact hide-sensitive terse file=$backupName;
+        /export compact hide-sensitive terse file=$backupName
     }
     
     :log info ("$SMP Config export complete: `$backupFileConfig`")
@@ -219,54 +219,79 @@
 }
 
 # Global variable to track current update step
-:global buGlobalVarUpdateStep;
+:global buGlobalVarUpdateStep
 ############### ^^^^^^^^^ GLOBALS ^^^^^^^^^ ###############
+
+:local deviceOsVerInst          [/system package update get installed-version];
+:local deviceOsVerInstNum       [$buGlobalFuncGetOsVerNum paramOsVer=$deviceOsVerInst];
+:local deviceIdentityName       [/system identity get name];
+:local deviceIdentityNameShort  [:pick $deviceIdentityName 0 18]
+:local deviceUpdateChannel      [/system package update get channel];
+
+:local deviceRbModel            "CloudHostedRouter";
+:local deviceRbSerialNumber     "--";
+:local deviceRbCurrentFw        "--";
+:local deviceRbUpgradeFw        "--";
+
+:if ($isSoftBased = false) do={
+    :set deviceRbModel          [/system routerboard get model];
+    :set deviceRbSerialNumber   [/system routerboard get serial-number];
+    :set deviceRbCurrentFw      [/system routerboard get current-firmware];
+    :set deviceRbUpgradeFw      [/system routerboard get upgrade-firmware];
+};
+
 
 :local mailBodyDeviceInfo   "\n\nDevice information: \nIdentity: $deviceIdentityName \nModel: $deviceRbModel \nSerial number: $deviceRbSerialNumber \nCurrent RouterOS: $deviceOsVerInst ($[/system package update get channel]) $[/system resource get build-time] \nCurrent routerboard FW: $deviceRbCurrentFw \nDevice uptime: $[/system resource get uptime]"
 
+# default and fallback public IP detection services
 :local ipAddressDetectServiceDefault "https://ipv4.mikrotik.ovh/"
 :local ipAddressDetectServiceFallback "https://api.ipify.org/"
-:local publicIpAddress "not-detected";
-:local telemetryDataQuery "";
 
-:local updateStep $buGlobalVarUpdateStep;
-:do {/system script environment remove buGlobalVarUpdateStep;} on-error={}
+# default values, to be set later
+:local publicIpAddress "not-detected"
+:local telemetryDataQuery ""
+
+:local updateStep $buGlobalVarUpdateStep
+:do {/system script environment remove buGlobalVarUpdateStep} on-error={}
 :if ([:len $updateStep] = 0) do={
-    :set updateStep 1;
+    :set updateStep 1
 }
 
 ## IP address detection & anonymous statistics collection
 :if ($updateStep = 1 or $updateStep = 3) do={
     :if ($updateStep = 3) do={
-        :log info ("$SMP Waiting for one minute before continuing to the final step.");
-        :delay 1m;
+        :log info ("$SMP Waiting for one minute before continuing to the final step.")
+        :delay 1m
     }
 
     :if ($detectPublicIpAddress = true or $allowAnonymousStatisticsCollection = true) do={
         :if ($allowAnonymousStatisticsCollection = true) do={
-            :set telemetryDataQuery ("\?mode=" . $scriptMode . "&osver=" . $deviceOsVerInst . "&model=" . $deviceRbModel);
+            :set telemetryDataQuery ("\?mode=" . $scriptMode . "&osver=" . $deviceOsVerInst . "&model=" . $deviceRbModel. "&step=" . $updateStep)
         }
 
-        :do {:set publicIpAddress ([/tool fetch http-method="get" url=($ipAddressDetectServiceDefault . $telemetryDataQuery) output=user as-value]->"data");} on-error={
-
+        :do {:set publicIpAddress ([/tool fetch http-method="get" url=($ipAddressDetectServiceDefault . $telemetryDataQuery) output=user as-value]->"data")} on-error={
             :if ($detectPublicIpAddress = true) do={
                 :log warning "$SMP Could not detect public IP address using default detection service: `$ipAddressDetectServiceDefault`"
                 :log warning "$SMP Trying to detect public ip using fallback detection service: `$ipAddressDetectServiceFallback`"
 
-                :do {:set publicIpAddress ([/tool fetch http-method="get" url=$ipAddressDetectServiceFallback output=user as-value]->"data");} on-error={
+                :do {
+                    :set publicIpAddress ([/tool fetch http-method="get" url=$ipAddressDetectServiceFallback output=user as-value]->"data")
+                } on-error={
                     :log warning "$SMP Could not detect public IP address using fallback detection service: `$ipAddressDetectServiceFallback`"
                 }
             }
         }
 
+        :set publicIpAddress ([:pick $publicIpAddress 0 15])
+
         :if ($detectPublicIpAddress = true) do={
-            # Always truncate the string for safety measures
-            :set publicIpAddress ([:pick $publicIpAddress 0 15])
-            :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nPublic IP address: $publicIpAddress");
+            # truncate IP to max 15 characters (basic safety)
+            :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nPublic IP address: $publicIpAddress")
+            :log info "$SMP Public IP address detected: `$publicIpAddress`"
         }
     }
 }
 
 # Remove functions from global environment to keep it fresh and clean.
-:do {/system script environment remove buGlobalFuncGetOsVerNum;} on-error={}
-:do {/system script environment remove buGlobalFuncCreateBackups;} on-error={}
+:do {/system script environment remove buGlobalFuncGetOsVerNum} on-error={}
+:do {/system script environment remove buGlobalFuncCreateBackups} on-error={}
