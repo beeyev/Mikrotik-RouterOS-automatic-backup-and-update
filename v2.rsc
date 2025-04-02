@@ -66,31 +66,23 @@
 :log info "\n$SMP script \"Mikrotik RouterOS automatic backup & update\" started.";
 :log info "$SMP Script Mode: $scriptMode, forceBackup: $forceBackup";
 
+:local scriptVersion "24.06.04";
 
-# Check email settings
-:if ([:len $emailAddress] = 0) do={
-    :log error ("$SMP \$emailAddress variable is empty. Script stopped.");
-    :error "$SMP bye!";
-}
-:local emailServer ""
-:do {
-    :set emailServer [/tool e-mail get server];
-} on-error={
-    # Old of getting email server before the RouterOS v7.12
-    :log info "$SMP Checking email server using old command `/tool e-mail get address`";
-    :set emailServer [/tool e-mail get address];
-}
-:if ($emailServer = "0.0.0.0" or [:len $emailServer] = 0) do={
-    :log error ("$SMP Email server address is not configured or is invalid. Please configure it in Tools -> Email and try again. Script stopped.");
-    :error "$SMP bye!";
-}
-:if ([:len [/tool e-mail get from]] = 0 or [/tool e-mail get from] = "<>" or [:find [/tool e-mail get from] "@"] = -1) do={
-    :log error ("$SMP Email configuration FROM address is missing or invalid. Please configure it in Tools -> Email and try again. Script stopped.");
-    :error "$SMP bye!";
-}
+# Current time `hh-mm-ss`
+:local currentTime ([:pick [/system clock get time] 0 2] . "-" . [:pick [/system clock get time] 3 5] . "-" . [:pick [/system clock get time] 6 8]);
 
+# Current date `YYYY-MM-DD`, will be defined later in the script
+:local currentDate "undefined";
 
-#Check if proper identity name is set
-if ([:len [/system identity get name]] = 0 or [/system identity get name] = "MikroTik") do={
-    :log warning ("$SMP Please set identity name of your device (System -> Identity), keep it short and informative.");
+# Checking if the date is in the old format with slashes and month name (e.g., `nov/11/2023`)
+:if ([:len [:tonum [:pick [/system clock get date] 0 1]]] = 0) do={
+    # Convert the old date format
+    # Example: `nov/11/2023` to `2023-nov-11`
+    :set currentDate ([:pick [/system clock get date] 7 11] . "-" . [:pick [/system clock get date] 0 3] . "-" . [:pick [/system clock get date] 4 6]);
+} else={
+    # getting current date in the new format (e.g., `2023-11-11`)
+    :set currentDate [/system clock get date];
 };
+
+# current date and time in the format `YYYY-MM-DD-hh-mm-ss` or `YYYY-Mon-11-hh-mm-ss`
+:local currentDateTime ($currentDate . "-" . $currentTime);
