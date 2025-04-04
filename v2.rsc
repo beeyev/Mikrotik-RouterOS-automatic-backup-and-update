@@ -60,13 +60,14 @@
 #  !!!! DO NOT CHANGE ANYTHING BELOW THIS LINE, IF YOU ARE NOT SURE WHAT YOU ARE DOING !!!!  #
 ##------------------------------------------------------------------------------------------##
 
+:local scriptVersion "24.06.04"
+
 #Script messages prefix
 :local SMP "Bkp&Upd:"
 
-:log info "\n$SMP script \"Mikrotik RouterOS automatic backup & update\" started."
+:log info "\n$SMP script \"Mikrotik RouterOS automatic backup & update\" v.$scriptVersion started."
 :log info "$SMP Script Mode: `$scriptMode`, forceBackup: `$forceBackup`"
 
-:local scriptVersion "24.06.04"
 
 ###########
 
@@ -241,7 +242,15 @@
 };
 
 
-:local mailBodyDeviceInfo   "\n\nDevice information: \nIdentity: $deviceIdentityName \nModel: $deviceRbModel \nSerial number: $deviceRbSerialNumber \nCurrent RouterOS: $deviceOsVerInst ($[/system package update get channel]) $[/system resource get build-time] \nCurrent routerboard FW: $deviceRbCurrentFw \nDevice uptime: $[/system resource get uptime]"
+# TODO
+:local mailBodyDeviceInfo  ""
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\n\nDevice information:")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nIdentity: $deviceIdentityName")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nModel: $deviceRbModel")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nSerial number: $deviceRbSerialNumber")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nCurrent RouterOS: $deviceOsVerInst ($[/system package update get channel]) $[/system resource get build-time]")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nCurrent routerboard FW: $deviceRbCurrentFw")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nDevice uptime: $[/system resource get uptime]")
 
 # default and fallback public IP detection services
 :local ipAddressDetectServiceDefault "https://ipv4.mikrotik.ovh/"
@@ -290,6 +299,15 @@
             :log info "$SMP Public IP address detected: `$publicIpAddress`"
         }
     }
+}
+
+
+## STEP ONE: Creating backups, checking for new RouterOs version and sending email with backups,
+## Steps 2 and 3 are fired only if script is set to automatically update device and if a new RouterOs version is available.
+:if ($updateStep = 1) do={
+    :log info ("$SMP Performing the first step.");
+
+
 }
 
 # Remove functions from global environment to keep it fresh and clean.
