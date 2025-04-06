@@ -32,7 +32,7 @@
 
 ## Additional parameter if you set `scriptMode` to `osupdate` or `osnotify`
 # Set `true` if you want the script to perform backup every time its fired, whatever script mode is set.
-:local forceBackup false
+:local forceBackup true
 
 ## Backup encryption password, no encryption if no password.
 :local backupPassword ""
@@ -166,11 +166,22 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
     :set currentDate $rawDate
 }
 
-## Combine date and time → `YYYY-MM-DD-hh-mm-ss` or `YYYY-Mon-11-hh-mm-ss`
+## Combine date and time → `YYYY-MM-DD-hh-mm-ss` or `YYYY-Mon-DD-hh-mm-ss`
 :local currentDateTime ($currentDate . "-" . $currentTime)
 
 
 #####
+
+
+## Check if it's a cloud hosted router or a hardware based device
+
+:local deviceBoardName [/system resource get board-name]
+
+:local isCloudHostedRouter false;
+:if ([:pick $deviceBoardName 0 3] = "CHR" or [:pick $deviceBoardName 0 3] = "x86") do={
+    :set isCloudHostedRouter true;
+};
+
 
 :local deviceCurrentUpdateChannel   [/system package update get channel]
 :local deviceOsVerInstalled         [/system package update get installed-version]
@@ -181,9 +192,25 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
 :local backupNameBeforeUpdate   "backup_before_update_$backupNameTemplate";
 :local backupNameAfterUpdate    "backup_after_update_$backupNameTemplate";
 
-############### vvvvvvvvv GLOBALS vvvvvvvvv ###############
 
-# Function: buGlobalFuncIsPatchUpdateOnly
+## Email body template
+
+:local mailBodyDeviceInfo  ""
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\n\nDevice information")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\n---------------------")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nName: $deviceIdentityName")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nModel: $deviceRbModel")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nSerial number: $deviceRbSerialNumber")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nRouterOS version: v$deviceOsVerInstalled ($deviceCurrentUpdateChannel)")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nBuild time: $[/system resource get build-time]")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nRouterboard FW: $deviceRbCurrentFw")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nDate time: $rawDate $rawTime")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nUptime: $[/system resource get uptime]")
+
+
+############### vvvvvvvvv FUNCTIONS vvvvvvvvv ###############
+
+# Function: FuncIsPatchUpdateOnly
 # ----------------------------
 # Determines if two RouterOS version strings differ only by the patch version.
 #
@@ -195,9 +222,9 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
 #    boolean | true if only the patch versions differ; false otherwise.
 #
 # Example:
-# :put [$buGlobalFuncIsPatchUpdateOnly "6.2.1" "6.2.4"]  # Output: true
-# :put [$buGlobalFuncIsPatchUpdateOnly "6.2.1" "6.3.1"]  # Output: false
-:global buGlobalFuncIsPatchUpdateOnly do={
+# :put [$FuncIsPatchUpdateOnly "6.2.1" "6.2.4"]  # Output: true
+# :put [$FuncIsPatchUpdateOnly "6.2.1" "6.3.1"]  # Output: false
+:local FuncIsPatchUpdateOnly do={
     :local ver1 $1
     :local ver2 $2
 
@@ -229,11 +256,11 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
 #    `backupPassword`           | string    |
 #    `sensitiveDataInConfig`    | boolean   |
 # Example:
-# :put [$buGlobalFuncCreateBackups backupName="daily-backup"]
-:global buGlobalFuncCreateBackups do={
+# :put [$FuncCreateBackups backupName="daily-backup"]
+:local FuncCreateBackups do={
     #Script messages prefix
     :local SMP "Bkp&Upd:"
-    :log info ("$SMP global function `buGlobalFuncCreateBackups` started, input: `$backupName`")
+    :log info ("$SMP global function `FuncCreateBackups` started, input: `$backupName`")
 
     # validate required parameter: backupName
     :if ([:typeof $backupName] != "str" or [:len $backupName] = 0) do={
@@ -276,14 +303,14 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
 
     :delay 20s
 
-    :log info ("$SMP global function `buGlobalFuncCreateBackups` finished. Created backups, system: `$backupFileSys`, config: `$backupFileConfig`")
+    :log info ("$SMP global function `FuncCreateBackups` finished. Created backups, system: `$backupFileSys`, config: `$backupFileConfig`")
 
     :return $backupNames
 }
 
 # Global variable to track current update step
 :global buGlobalVarUpdateStep
-############### ^^^^^^^^^ GLOBALS ^^^^^^^^^ ###############
+############### ^^^^^^^^^ FUNCTIONS ^^^^^^^^^ ###############
 
 :local updateStep $buGlobalVarUpdateStep
 :do {/system script environment remove buGlobalVarUpdateStep} on-error={}
@@ -335,7 +362,7 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
 
 
     # Checking If the script needs to create a backup
-    if ($forceBackup = true or $isOsNeedsToBeUpdated = true) do={
+    if ($forceBackup = true or $scriptMode = "backup" or $isOsNeedsToBeUpdated = true) do={
         :log info ("$SMP Starting backup process.")
 
         :local backupName $backupNameTemplate
@@ -345,10 +372,10 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
             :set backupName $backupNameBeforeUpdate
         }
 
-        :set mailAttachments [$buGlobalFuncCreateBackups backupName=$backupName backupPassword=$backupPassword sensitiveDataInConfig=$sensitiveDataInConfig];
+        :set mailAttachments [$FuncCreateBackups backupName=$backupName backupPassword=$backupPassword sensitiveDataInConfig=$sensitiveDataInConfig];
     }
 }
 
 # Remove functions from global environment to keep it fresh and clean.
-:do {/system script environment remove buGlobalFuncIsPatchUpdateOnly} on-error={}
-:do {/system script environment remove buGlobalFuncCreateBackups} on-error={}
+# :do {/system script environment remove FuncIsPatchUpdateOnly} on-error={}
+# :do {/system script environment remove FuncCreateBackups} on-error={}
