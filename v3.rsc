@@ -129,7 +129,7 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
         # Check each character
         :for i from=0 to=([:len $version] - 1) do={
             :set c [:pick $version $i]
-            :if ([:find $allowedChars $c] = -1) do={
+            :if ([:len [:find $allowedChars $c]] = 0) do={
                 :return false
             }
         }
