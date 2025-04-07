@@ -156,18 +156,31 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
 #####
 
 
-## Check if it's a cloud hosted router or a hardware based device
 
 :local deviceBoardName [/system resource get board-name]
 
+## Check if it's a cloud hosted router or a hardware based device
 :local isCloudHostedRouter false;
 :if ([:pick $deviceBoardName 0 3] = "CHR" or [:pick $deviceBoardName 0 3] = "x86") do={
     :set isCloudHostedRouter true;
 };
 
+:local deviceRbModel            "CloudHostedRouter";
+:local deviceRbSerialNumber     "--";
+:local deviceRbCurrentFw        "--";
+:local deviceRbUpgradeFw        "--";
+
+:if ($isCloudHostedRouter = false) do={
+    :set deviceRbModel          [/system routerboard get model];
+    :set deviceRbSerialNumber   [/system routerboard get serial-number];
+    :set deviceRbCurrentFw      [/system routerboard get current-firmware];
+    :set deviceRbUpgradeFw      [/system routerboard get upgrade-firmware];
+};
+
 
 :local deviceCurrentUpdateChannel   [/system package update get channel]
-:local deviceOsVerInstalled         [/system package update get installed-version]
+:local deviceOsVerAndChannelInstalled [/system resource get version]
+
 
 :local mailAttachments  [:toarray ""];
 
@@ -183,8 +196,9 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\n---------------------")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nName: $deviceIdentityName")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nModel: $deviceRbModel")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nBoard: deviceBoardName")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nSerial number: $deviceRbSerialNumber")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nRouterOS version: v$deviceOsVerInstalled ($deviceCurrentUpdateChannel)")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nRouterOS version: v$deviceOsVerAndChannelInstalled")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nBuild time: $[/system resource get build-time]")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nRouterboard FW: $deviceRbCurrentFw")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nDate time: $rawDate $rawTime")
@@ -192,6 +206,39 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
 
 
 ############### vvvvvvvvv FUNCTIONS vvvvvvvvv ###############
+# Function: FuncGetInstalledOsChannel
+# ----------------------------
+# Returns installed RouterOS channel (stable, long-term, testing, development)
+#
+# Example:
+# :put [$FuncGetInstalledOsChannel]  # Output: stable
+:local FuncGetInstalledOsChannel do={
+    :local installedOsChannel [/system resource get version]
+    :local errorMessage "Bkp&Upd: Could not extract installed OS channel from version string: `$installedOsChannel`. Script stopped."
+
+    :local open [:find $installedOsChannel "("]
+    if ([:len $open] = 0) do={
+        :log error ($errorMessage . " (1)")
+        :error $exitErrorMessage
+    }
+
+    :local rest [:pick $installedOsChannel ($open+1) [:len $installedOsChannel]]
+
+    :local close [:find $rest ")"]
+    if ([:len $close] = 0) do={
+        :log error ($errorMessage . " (2)")
+        :error $exitErrorMessage
+    }
+
+    :local channel [:pick $rest 0 $close]
+    if ([:len $channel] = 0) do={
+        :log error ($errorMessage . " (3)")
+        :error $exitErrorMessage
+    }
+
+    :return $channel
+}
+
 
 # Function: FuncIsPatchUpdateOnly
 # ----------------------------
