@@ -48,7 +48,7 @@
 ## Means that new update will be installed only if MAJOR and MINOR version numbers remained the same as currently installed RouterOS.
 ## Example: v6.43.6 => major.minor.PATCH
 ## Script will send information if new version is greater than just patch.
-:local installOnlyPatchUpdates false
+:local installOnlyPatchUpdates true
 
 ## If true, device public IP address information will be included into the email message
 :local detectPublicIpAddress true
@@ -116,31 +116,14 @@ if ($updateChannel != "stable" and $updateChannel != "long-term" and $updateChan
 # Check if the script is set to install only patch updates and if the update channel is valid
 if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
     if ($updateChannel != "stable" and $updateChannel != "long-term") do={
-        :log error ("$SMP Script parameter `\$installOnlyPatchUpdates` is set to true, but the update channel is not valid: `$updateChannel`. Script stopped.")
+        :log error ("$SMP Script is set to install only patch updates, but the update channel is not valid: `$updateChannel`. Only `stable` and `long-term` channels supported. Script stopped.")
         :error $exitErrorMessage
     }
 
-    :local isValidVersionString do={
-        :local version $1
-        :local allowedChars "0123456789."
-        :local i 0
-        :local c ""
+    :local susInstalledOsChannel [/system resource get version]
 
-        # Check each character
-        :for i from=0 to=([:len $version] - 1) do={
-            :set c [:pick $version $i]
-            :if ([:len [:find $allowedChars $c]] = 0) do={
-                :return false
-            }
-        }
-
-        :return true
-    }
-
-    :local susInstalledOs [/system package update get installed-version]
-
-    :if ([$isValidVersionString $susInstalledOs] = true) do={
-        :log error ("$SMP Current RouterOS is testing or development version: `$susInstalledOs`, patch updates supported only for stable and long-term versions. Script stopped.")
+    if ([:len [:find $susInstalledOsChannel "stable"]] = 0 and [:len [:find $susInstalledOsChannel "long-term"]] = 0) do={
+        :log error ("$SMP Script is set to install only patch updates, but the installed RouterOS version is not from `stable` or `long-term` channel: `$susInstalledOsChannel`. Script stopped.")
         :error $exitErrorMessage
     }
 }
