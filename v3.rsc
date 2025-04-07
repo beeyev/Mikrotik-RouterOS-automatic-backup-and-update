@@ -62,148 +62,17 @@
 
 :local scriptVersion "24.06.04"
 
+# default and fallback public IP detection services
+:local ipAddressDetectServiceDefault "https://ipv4.mikrotik.ovh/"
+:local ipAddressDetectServiceFallback "https://api.ipify.org/"
+
 #Script messages prefix
 :local SMP "Bkp&Upd:"
 
 :local exitErrorMessage "$SMP script stopped due to an error. Please check logs for more details."
-
 :log info "\n$SMP Script \"Mikrotik RouterOS automatic backup & update\" v.$scriptVersion started."
 # TODO Improve this line
 #:log info "$SMP Script Mode: `$scriptMode`, forceBackup: `$forceBackup`"
-
-#
-# Initial validation
-# 
-
-## Check email settings
-:if ([:len $emailAddress] < 3) do={
-    :log error ("$SMP Script parameter `\$emailAddress` is not set, or contains invalid value. Script stopped.")
-    :error $exitErrorMessage
-}
-
-# Values will be defined later in the script
-:local emailServer ""
-:local emailFromAddress [/tool e-mail get from]
-
-:log info "$SMP Validating email settings..."
-:do {
-    :set emailServer [/tool e-mail get server]
-} on-error={
-    # This is a workaround for the RouterOS v7.12 and older versions
-    :set emailServer [/tool e-mail get address]
-}
-:if ($emailServer = "0.0.0.0") do={
-    :log error ("$SMP Email server address is not correct: `$emailServer`, please check `Tools -> Email`. Script stopped.");
-    :error $exitErrorMessage
-}
-:if ([:len $emailFromAddress] < 3) do={
-    :log error ("$SMP Email configuration FROM address is not correct: `$emailFromAddress`, please check `Tools -> Email`. Script stopped.");
-    :error $exitErrorMessage
-}
-
-# Script mode validation
-if ($scriptMode != "backup" and $scriptMode != "osupdate" and $scriptMode != "osnotify") do={
-    :log error ("$SMP Script parameter `\$scriptMode` is not set, or contains invalid value: `$scriptMode`. Script stopped.")
-    :error $exitErrorMessage
-}
-
-# Update channel validation
-if ($updateChannel != "stable" and $updateChannel != "long-term" and $updateChannel != "testing" and $updateChannel != "development") do={
-    :log error ("$SMP Script parameter `\$updateChannel` is not set, or contains invalid value: `$updateChannel`. Script stopped.")
-    :error $exitErrorMessage
-}
-
-# Check if the script is set to install only patch updates and if the update channel is valid
-if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
-    if ($updateChannel != "stable" and $updateChannel != "long-term") do={
-        :log error ("$SMP Script is set to install only patch updates, but the update channel is not valid: `$updateChannel`. Only `stable` and `long-term` channels supported. Script stopped.")
-        :error $exitErrorMessage
-    }
-
-    :local susInstalledOsChannel [/system resource get version]
-
-    if ([:len [:find $susInstalledOsChannel "stable"]] = 0 and [:len [:find $susInstalledOsChannel "long-term"]] = 0) do={
-        :log error ("$SMP Script is set to install only patch updates, but the installed RouterOS version is not from `stable` or `long-term` channel: `$susInstalledOsChannel`. Script stopped.")
-        :error $exitErrorMessage
-    }
-}
-
-#
-# Get current system date and time 
-#
-:local rawTime [/system clock get time]
-:local rawDate [/system clock get date]
-
-## Current time in specific format `hh-mm-ss`
-:local currentTime ([:pick $rawTime 0 2] . "-" . [:pick $rawTime 3 5] . "-" . [:pick $rawTime 6 8])
-
-## Current date `YYYY-MM-DD` or `YYYY-Mon-DD`, will be defined later in the script
-:local currentDate "undefined"
-
-## Check if the date is in the old format, it should not start with a number
-:if ([:len [:tonum [:pick $rawDate 0 1]]] = 0) do={
-    # Convert old format `nov/11/2023` → `2023-nov-11`
-    :set currentDate ([:pick $rawDate 7 11] . "-" . [:pick $rawDate 0 3] . "-" . [:pick $rawDate 4 6])
-} else={
-    # Use new format as is `YYYY-MM-DD`
-    :set currentDate $rawDate
-}
-
-## Combine date and time → `YYYY-MM-DD-hh-mm-ss` or `YYYY-Mon-DD-hh-mm-ss`
-:local currentDateTime ($currentDate . "-" . $currentTime)
-
-
-#####
-
-
-
-:local deviceBoardName [/system resource get board-name]
-
-## Check if it's a cloud hosted router or a hardware based device
-:local isCloudHostedRouter false;
-:if ([:pick $deviceBoardName 0 3] = "CHR" or [:pick $deviceBoardName 0 3] = "x86") do={
-    :set isCloudHostedRouter true;
-};
-
-:local deviceRbModel            "CloudHostedRouter";
-:local deviceRbSerialNumber     "--";
-:local deviceRbCurrentFw        "--";
-:local deviceRbUpgradeFw        "--";
-
-:if ($isCloudHostedRouter = false) do={
-    :set deviceRbModel          [/system routerboard get model];
-    :set deviceRbSerialNumber   [/system routerboard get serial-number];
-    :set deviceRbCurrentFw      [/system routerboard get current-firmware];
-    :set deviceRbUpgradeFw      [/system routerboard get upgrade-firmware];
-};
-
-
-:local deviceCurrentUpdateChannel   [/system package update get channel]
-:local deviceOsVerAndChannelInstalled [/system resource get version]
-
-
-:local mailAttachments  [:toarray ""];
-
-:local backupNameTemplate       "v$deviceOsVerInstalled_$deviceCurrentUpdateChannel_$currentDateTime";
-:local backupNameBeforeUpdate   "backup_before_update_$backupNameTemplate";
-:local backupNameAfterUpdate    "backup_after_update_$backupNameTemplate";
-
-
-## Email body template
-
-:local mailBodyDeviceInfo  ""
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\n\nDevice information")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\n---------------------")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nName: $deviceIdentityName")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nModel: $deviceRbModel")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nBoard: deviceBoardName")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nSerial number: $deviceRbSerialNumber")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nRouterOS version: v$deviceOsVerAndChannelInstalled")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nBuild time: $[/system resource get build-time]")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nRouterboard FW: $deviceRbCurrentFw")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nDate time: $rawDate $rawTime")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nUptime: $[/system resource get uptime]")
-
 
 ############### vvvvvvvvv FUNCTIONS vvvvvvvvv ###############
 # Function: FuncGetInstalledOsChannel
@@ -213,16 +82,17 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
 # Example:
 # :put [$FuncGetInstalledOsChannel]  # Output: stable
 :local FuncGetInstalledOsChannel do={
-    :local installedOsChannel [/system resource get version]
-    :local errorMessage "Bkp&Upd: Could not extract installed OS channel from version string: `$installedOsChannel`. Script stopped."
+    :local installedOsAndChannel [/system resource get version]
+    :local errorMessage "Bkp&Upd: Could not extract installed OS channel from version string: `$installedOsAndChannel`. Script stopped."
+    :local exitErrorMessage "Bkp&Upd: script stopped due to an error. Please check logs for more details."
 
-    :local open [:find $installedOsChannel "("]
+    :local open [:find $installedOsAndChannel "("]
     if ([:len $open] = 0) do={
         :log error ($errorMessage . " (1)")
         :error $exitErrorMessage
     }
 
-    :local rest [:pick $installedOsChannel ($open+1) [:len $installedOsChannel]]
+    :local rest [:pick $installedOsAndChannel ($open+1) [:len $installedOsAndChannel]]
 
     :local close [:find $rest ")"]
     if ([:len $close] = 0) do={
@@ -238,7 +108,6 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
 
     :return $channel
 }
-
 
 # Function: FuncIsPatchUpdateOnly
 # ----------------------------
@@ -340,13 +209,142 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
 
 # Global variable to track current update step
 :global buGlobalVarUpdateStep
-############### ^^^^^^^^^ FUNCTIONS ^^^^^^^^^ ###############
-
 :local updateStep $buGlobalVarUpdateStep
 :do {/system script environment remove buGlobalVarUpdateStep} on-error={}
 :if ([:len $updateStep] = 0) do={
     :set updateStep 1
 }
+############### ^^^^^^^^^ FUNCTIONS ^^^^^^^^^ ###############
+
+
+#
+# Initial validation
+# 
+
+## Check email settings
+:if ([:len $emailAddress] < 3) do={
+    :log error ("$SMP Script parameter `\$emailAddress` is not set, or contains invalid value. Script stopped.")
+    :error $exitErrorMessage
+}
+
+# Values will be defined later in the script
+:local emailServer ""
+:local emailFromAddress [/tool e-mail get from]
+
+:log info "$SMP Validating email settings..."
+:do {
+    :set emailServer [/tool e-mail get server]
+} on-error={
+    # This is a workaround for the RouterOS v7.12 and older versions
+    :set emailServer [/tool e-mail get address]
+}
+:if ($emailServer = "0.0.0.0") do={
+    :log error ("$SMP Email server address is not correct: `$emailServer`, please check `Tools -> Email`. Script stopped.");
+    :error $exitErrorMessage
+}
+:if ([:len $emailFromAddress] < 3) do={
+    :log error ("$SMP Email configuration FROM address is not correct: `$emailFromAddress`, please check `Tools -> Email`. Script stopped.");
+    :error $exitErrorMessage
+}
+
+# Script mode validation
+if ($scriptMode != "backup" and $scriptMode != "osupdate" and $scriptMode != "osnotify") do={
+    :log error ("$SMP Script parameter `\$scriptMode` is not set, or contains invalid value: `$scriptMode`. Script stopped.")
+    :error $exitErrorMessage
+}
+
+# Update channel validation
+if ($updateChannel != "stable" and $updateChannel != "long-term" and $updateChannel != "testing" and $updateChannel != "development") do={
+    :log error ("$SMP Script parameter `\$updateChannel` is not set, or contains invalid value: `$updateChannel`. Script stopped.")
+    :error $exitErrorMessage
+}
+
+# Check if the script is set to install only patch updates and if the update channel is valid
+if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
+    if ($updateChannel != "stable" and $updateChannel != "long-term") do={
+        :log error ("$SMP Script is set to install only patch updates, but the update channel is not valid: `$updateChannel`. Only `stable` and `long-term` channels supported. Script stopped.")
+        :error $exitErrorMessage
+    }
+
+    :local susInstalledOsChannel [$FuncGetInstalledOsChannel]
+
+    if ($susInstalledOsChannel != "stable" and $susInstalledOsChannel != "long-term") do={
+        :log error ("$SMP Script is set to install only patch updates, but the installed RouterOS version is not from `stable` or `long-term` channel: `$susInstalledOsChannel`. Script stopped.")
+        :error $exitErrorMessage
+    }
+}
+
+#
+# Get current system date and time 
+#
+:local rawTime [/system clock get time]
+:local rawDate [/system clock get date]
+
+## Current time in specific format `hh-mm-ss`
+:local currentTime ([:pick $rawTime 0 2] . "-" . [:pick $rawTime 3 5] . "-" . [:pick $rawTime 6 8])
+
+## Current date `YYYY-MM-DD` or `YYYY-Mon-DD`, will be defined later in the script
+:local currentDate "undefined"
+
+## Check if the date is in the old format, it should not start with a number
+:if ([:len [:tonum [:pick $rawDate 0 1]]] = 0) do={
+    # Convert old format `nov/11/2023` → `2023-nov-11`
+    :set currentDate ([:pick $rawDate 7 11] . "-" . [:pick $rawDate 0 3] . "-" . [:pick $rawDate 4 6])
+} else={
+    # Use new format as is `YYYY-MM-DD`
+    :set currentDate $rawDate
+}
+
+## Combine date and time → `YYYY-MM-DD-hh-mm-ss` or `YYYY-Mon-DD-hh-mm-ss`
+:local currentDateTime ($currentDate . "-" . $currentTime)
+
+
+#####
+
+
+:local deviceBoardName [/system resource get board-name]
+
+## Check if it's a cloud hosted router or a hardware based device
+:local isCloudHostedRouter false;
+:if ([:pick $deviceBoardName 0 3] = "CHR" or [:pick $deviceBoardName 0 3] = "x86") do={
+    :set isCloudHostedRouter true;
+};
+
+:local deviceRbModel            "CloudHostedRouter";
+:local deviceRbSerialNumber     "--";
+:local deviceRbCurrentFw        "--";
+:local deviceRbUpgradeFw        "--";
+
+:if ($isCloudHostedRouter = false) do={
+    :set deviceRbModel          [/system routerboard get model];
+    :set deviceRbSerialNumber   [/system routerboard get serial-number];
+    :set deviceRbCurrentFw      [/system routerboard get current-firmware];
+    :set deviceRbUpgradeFw      [/system routerboard get upgrade-firmware];
+};
+
+:local installedOsChannel [$FuncGetInstalledOsChannel]
+:local deviceOsVerAndChannelInstalled [/system resource get version]
+
+:local backupNameTemplate       "v$deviceOsVerInstalled_$installedOsChannel_$currentDateTime";
+:local backupNameBeforeUpdate   "backup_before_update_$backupNameTemplate";
+:local backupNameAfterUpdate    "backup_after_update_$backupNameTemplate";
+
+## Email body template
+
+:local mailBodyDeviceInfo  ""
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\n\nDevice information")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\n---------------------")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nName: $deviceIdentityName")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nModel: $deviceRbModel")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nBoard: $deviceBoardName")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nSerial number: $deviceRbSerialNumber")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nRouterOS version: v$deviceOsVerAndChannelInstalled")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nBuild time: $[/system resource get build-time]")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nRouterboard FW: $deviceRbCurrentFw")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nDate time: $rawDate $rawTime")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nUptime: $[/system resource get uptime]")
+
+:local mailAttachments  [:toarray ""];
 
 ## STEP ONE: Creating backups, checking for new RouterOs version and sending email with backups,
 ## Steps 2 and 3 are fired only if script is set to automatically update device and if a new RouterOs version is available.
