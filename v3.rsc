@@ -184,13 +184,13 @@
 
     #Script messages prefix
     :local SMP "Bkp&Upd:"
+    :local exitErrorMessage "$SMP script stopped due to an error. Please check logs for more details."
     :log info ("$SMP global function `FuncCreateBackups` started, input: `$backupName`")
 
     # validate required parameter: backupName
     :if ([:typeof $backupName] != "str" or [:len $backupName] = 0) do={
-        :local errMesg "$SMP parameter 'backupName' is required and must be a non-empty string"
-        :log error $errMesg
-        :error $errMesg
+        :log error "$SMP parameter 'backupName' is required and must be a non-empty string"
+        :error $exitErrorMessage
     } 
 
     :local backupFileSys "$backupName.backup"
@@ -226,6 +226,20 @@
     :log info ("$SMP Waiting a little to ensure backup files are written")
 
     :delay 20s
+
+    :if ([:len [/file find name=$backupFileSys]] > 0) do={
+        :log info ("$SMP system backup file successfully saved to the file system: `$backupFileSys`")
+    } else={
+        :log error ("$SMP system backup was not created, file does not exist: `$backupFileSys`")
+        :error $exitErrorMessage
+    }
+
+    :if ([:len [/file find name=$backupFileConfig]] > 0) do={
+        :log info ("$SMP config backup file successfully saved to the file system: `$backupFileConfig`")
+    } else={
+        :log error ("$SMP config backup was not created, file does not exist: `$backupFileConfig`")
+        :error $exitErrorMessage
+    }
 
     :log info ("$SMP global function `FuncCreateBackups` finished. Created backups, system: `$backupFileSys`, config: `$backupFileConfig`")
 
@@ -354,16 +368,16 @@
 :local runningOsVersion [$FuncGetRunningOsVersion]
 :local deviceOsVerAndChannelRunning [/system resource get version]
 
-:local backupNameTemplate       "v$runningOsVersion_$runningOsChannel_$currentDateTime"
+:local backupNameTemplate       "backup_v$runningOsVersion_$runningOsChannel_$currentDateTime"
 :local backupNameBeforeUpdate   "backup_before_update_$backupNameTemplate"
 :local backupNameAfterUpdate    "backup_after_update_$backupNameTemplate"
 
 ## Email body template
 
 :local mailSubject  "$SMP Device - $deviceIdentityNameShort."
-:local mailBody     ""
+:local mailBodyMessage     ""
 
-:local mailBodyCopyright    "\r\n\r\nMikrotik RouterOS automatic backup & update (ver. $scriptVersion) \r\nhttps://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update"
+:local mailBodyCopyright    "\n\nMikrotik RouterOS automatic backup & update (ver. $scriptVersion) \nhttps://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update"
 :local changelogUrl         "Check RouterOS changelog: https://mikrotik.com/download/changelogs/"
 
 :local mailBodyDeviceInfo  ""
@@ -429,6 +443,7 @@
     :local isNewOsUpdateAvailable false
     :local isLatestOsAlreadyInstalled true
     :local isOsNeedsToBeUpdated false
+    :local isUpdateCheckSucceded false
 
     # Checking for new RouterOS version
     :if ($scriptMode = "osupdate" or $scriptMode = "osnotify") do={      
@@ -449,22 +464,26 @@
             :log info ("$SMP New RouterOS version is available: `$routerOsVersionAvailable`")
             :set isNewOsUpdateAvailable true
             :set isLatestOsAlreadyInstalled false
+            :set isUpdateCheckSucceded true
         } else={
             :if ($packageUpdateStatus = "System is already up to date") do={
+                :set isUpdateCheckSucceded true
                 :log info ("$SMP No new RouterOS version is available, this device is already up to date: `$runningOsVersion`")
             } else={
                 :log error ("$SMP Failed to check for new RouterOS version. Package check status: `$packageUpdateStatus`")
+                #:set mailSubject        ($mailSubject . " Error: Unable to Check RouterOS Version!")
+                #:set mailBodyMessage    ($mailBodyMessage . "An error occurred while checking for a new RouterOS version.\nStatus returned: `$packageUpdateStatus`\n\nPlease review the logs on the device for more details and verify internet connectivity.")
             }
         }
     }
 
     :if ($scriptMode = "osupdate" and $isNewOsUpdateAvailable = true) do={
         :if ($installOnlyPatchUpdates = true) do={
-            :if ([$FuncIsPatchUpdateOnly $runningOsVersion $routerOsVersionAvailable] = false) do={
-                :log info ("$SMP New RouterOS version is available, but it is not a patch update. Current version: `$runningOsVersion`, new version: `$routerOsVersionAvailable`.")
+            :if ([$FuncIsPatchUpdateOnly $runningOsVersion $routerOsVersionAvailable] = true) do={
+                :log info ("$SMP New RouterOS version is available, and it is a patch update. Current version: `$runningOsVersion`, new version: `$routerOsVersionAvailable`.")
                 :set isOsNeedsToBeUpdated true
             } else={
-                :log info ("$SMP New RouterOS version is available and it is a patch update. Current version: `$runningOsVersion`, new version: `$routerOsVersionAvailable`.")
+                :log info ("$SMP The script will not install this update, because it is not a patch update. Current version: `$runningOsVersion`, new version: `$routerOsVersionAvailable`.")
             }
         } else={
             :set isOsNeedsToBeUpdated true
