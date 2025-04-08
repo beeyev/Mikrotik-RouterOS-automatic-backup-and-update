@@ -75,24 +75,45 @@
 #:log info "$SMP Script Mode: `$scriptMode`, forceBackup: `$forceBackup`"
 
 ############### vvvvvvvvv FUNCTIONS vvvvvvvvv ###############
-# Function: FuncGetInstalledOsChannel
+
+# Function: FuncGetRunningOsVersion
 # ----------------------------
-# Returns installed RouterOS channel (stable, long-term, testing, development)
+# Returns currently running RouterOS version
 #
 # Example:
-# :put [$FuncGetInstalledOsChannel]  # Output: stable
-:local FuncGetInstalledOsChannel do={
-    :local installedOsAndChannel [/system resource get version]
-    :local errorMessage "Bkp&Upd: Could not extract installed OS channel from version string: `$installedOsAndChannel`. Script stopped."
+# :put [$FuncGetRunningOsVersion]  # Output: 6.48.1
+:local FuncGetRunningOsVersion do={
+    :local runningOsAndChannel [/system resource get version]
+
+    :local spacePos [:find $runningOsAndChannel " "]
+    if ([:len $spacePos] = 0) do={
+        :log error "Bkp&Upd: Could not extract installed OS version string: `$runningOsAndChannel`. Script stopped."
+        :error "Bkp&Upd: script stopped due to an error. Please check logs for more details."
+    }
+
+    :local versionOnly [:pick $runningOsAndChannel 0 $spacePos]
+
+    :return $versionOnly
+}
+
+# Function: FuncGetRunningOsChannel
+# ----------------------------
+# Returns currently running RouterOS channel (stable, long-term, testing, development)
+#
+# Example:
+# :put [$FuncGetRunningOsChannel]  # Output: stable
+:local FuncGetRunningOsChannel do={
+    :local runningOsAndChannel [/system resource get version]
+    :local errorMessage "Bkp&Upd: Could not extract installed OS channel from version string: `$runningOsAndChannel`. Script stopped."
     :local exitErrorMessage "Bkp&Upd: script stopped due to an error. Please check logs for more details."
 
-    :local open [:find $installedOsAndChannel "("]
+    :local open [:find $runningOsAndChannel "("]
     if ([:len $open] = 0) do={
         :log error ($errorMessage . " (1)")
         :error $exitErrorMessage
     }
 
-    :local rest [:pick $installedOsAndChannel ($open+1) [:len $installedOsAndChannel]]
+    :local rest [:pick $runningOsAndChannel ($open+1) [:len $runningOsAndChannel]]
 
     :local close [:find $rest ")"]
     if ([:len $close] = 0) do={
@@ -266,10 +287,10 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
         :error $exitErrorMessage
     }
 
-    :local susInstalledOsChannel [$FuncGetInstalledOsChannel]
+    :local susRunningOsChannel [$FuncGetRunningOsChannel]
 
-    if ($susInstalledOsChannel != "stable" and $susInstalledOsChannel != "long-term") do={
-        :log error ("$SMP Script is set to install only patch updates, but the installed RouterOS version is not from `stable` or `long-term` channel: `$susInstalledOsChannel`. Script stopped.")
+    if ($susRunningOsChannel != "stable" and $susRunningOsChannel != "long-term") do={
+        :log error ("$SMP Script is set to install only patch updates, but the installed RouterOS version is not from `stable` or `long-term` channel: `$susRunningOsChannel`. Script stopped.")
         :error $exitErrorMessage
     }
 }
@@ -310,26 +331,36 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
     :set isCloudHostedRouter true;
 };
 
+:local deviceIdentityName       [/system identity get name];
+:local deviceIdentityNameShort  [:pick $deviceIdentityName 0 18]
+
 :local deviceRbModel            "CloudHostedRouter";
-:local deviceRbSerialNumber     "--";
-:local deviceRbCurrentFw        "--";
-:local deviceRbUpgradeFw        "--";
+:local deviceRbSerialNumber     "--"
+:local deviceRbCurrentFw        "--"
+:local deviceRbUpgradeFw        "--"
 
 :if ($isCloudHostedRouter = false) do={
-    :set deviceRbModel          [/system routerboard get model];
-    :set deviceRbSerialNumber   [/system routerboard get serial-number];
-    :set deviceRbCurrentFw      [/system routerboard get current-firmware];
-    :set deviceRbUpgradeFw      [/system routerboard get upgrade-firmware];
+    :set deviceRbModel          [/system routerboard get model]
+    :set deviceRbSerialNumber   [/system routerboard get serial-number]
+    :set deviceRbCurrentFw      [/system routerboard get current-firmware]
+    :set deviceRbUpgradeFw      [/system routerboard get upgrade-firmware]
 };
 
-:local installedOsChannel [$FuncGetInstalledOsChannel]
-:local deviceOsVerAndChannelInstalled [/system resource get version]
+:local runningOsChannel [$FuncGetRunningOsChannel]
+:local runningOsVersion [$FuncGetRunningOsVersion]
+:local deviceOsVerAndChannelRunning [/system resource get version]
 
-:local backupNameTemplate       "v$deviceOsVerInstalled_$installedOsChannel_$currentDateTime";
-:local backupNameBeforeUpdate   "backup_before_update_$backupNameTemplate";
-:local backupNameAfterUpdate    "backup_after_update_$backupNameTemplate";
+:local backupNameTemplate       "v$runningOsVersion_$runningOsChannel_$currentDateTime"
+:local backupNameBeforeUpdate   "backup_before_update_$backupNameTemplate"
+:local backupNameAfterUpdate    "backup_after_update_$backupNameTemplate"
 
 ## Email body template
+
+:local mailSubject  "$SMP Device - $deviceIdentityNameShort."
+:local mailBody     ""
+
+:local mailBodyCopyright    "\r\n\r\nMikrotik RouterOS automatic backup & update (ver. $scriptVersion) \r\nhttps://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update"
+:local changelogUrl         "Check RouterOS changelog: https://mikrotik.com/download/changelogs/"
 
 :local mailBodyDeviceInfo  ""
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\n\nDevice information")
@@ -338,54 +369,102 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nModel: $deviceRbModel")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nBoard: $deviceBoardName")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nSerial number: $deviceRbSerialNumber")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nRouterOS version: v$deviceOsVerAndChannelInstalled")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nRouterOS version: v$deviceOsVerAndChannelRunning")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nBuild time: $[/system resource get build-time]")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nRouterboard FW: $deviceRbCurrentFw")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nDate time: $rawDate $rawTime")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nUptime: $[/system resource get uptime]")
+# IP address will be appended later if needed
 
-:local mailAttachments  [:toarray ""];
+:local mailAttachments  [:toarray ""]
+
+
+## IP address detection & anonymous statistics collection
+:if ($updateStep = 1 or $updateStep = 3) do={
+    :if ($updateStep = 3) do={
+        :log info ("$SMP Waiting for one minute before continuing to the final step.")
+        :delay 1m
+    }
+    # default values, to be set later
+    :local publicIpAddress "not-detected"
+    :local telemetryDataQuery ""
+
+    :if ($detectPublicIpAddress = true or $allowAnonymousStatisticsCollection = true) do={
+        :if ($allowAnonymousStatisticsCollection = true) do={
+            :set telemetryDataQuery ("\?mode=" . $scriptMode . "&osver=" . $deviceOsVerInst . "&model=" . $deviceRbModel. "&step=" . $updateStep)
+        }
+
+        :do {:set publicIpAddress ([/tool fetch http-method="get" url=($ipAddressDetectServiceDefault . $telemetryDataQuery) output=user as-value]->"data")} on-error={
+            :if ($detectPublicIpAddress = true) do={
+                :log warning "$SMP Could not detect public IP address using default detection service: `$ipAddressDetectServiceDefault`"
+                :log warning "$SMP Trying to detect public IP using fallback detection service: `$ipAddressDetectServiceFallback`"
+                :do {
+                    :set publicIpAddress ([/tool fetch http-method="get" url=$ipAddressDetectServiceFallback output=user as-value]->"data")
+                } on-error={
+                    :log warning "$SMP Could not detect public IP address using fallback detection service: `$ipAddressDetectServiceFallback`"
+                }
+            }
+        }
+
+        :set publicIpAddress ([:pick $publicIpAddress 0 15])
+
+        :if ($detectPublicIpAddress = true) do={
+            # truncate IP to max 15 characters (basic safety)
+            :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nPublic IP address: $publicIpAddress")
+            :log info "$SMP Public IP address detected: `$publicIpAddress`"
+        }
+    }
+}
 
 ## STEP ONE: Creating backups, checking for new RouterOs version and sending email with backups,
 ## Steps 2 and 3 are fired only if script is set to automatically update device and if a new RouterOs version is available.
 :if ($updateStep = 1) do={
     :log info ("$SMP Performing the first step.")
 
-    :local deviceOsVerAvailable "0.0.0"
-    :local packageUpdateStatus "undefined"
+    :local routerOsVersionAvailable "0.0.0"
     :local isNewOsUpdateAvailable false
     :local isLatestOsAlreadyInstalled true
     :local isOsNeedsToBeUpdated false
 
     # Checking for new RouterOS version
-    if ($scriptMode = "osupdate" or $scriptMode = "osnotify") do={
-            log info ("$SMP Setting update channel to `$updateChannel`")
-            /system package update set channel=$updateChannel
-            log info ("$SMP Checking for new RouterOS version. Current installed version is: `$deviceOsVerInstalled`")
-            /system package update check-for-updates
+    if ($scriptMode = "osupdate" or $scriptMode = "osnotify") do={      
+        log info ("$SMP Setting update channel to `$updateChannel`")
+        /system package update set channel=$updateChannel
+        log info ("$SMP Checking for new RouterOS version. Current installed version is: `$runningOsVersion`")
+        /system package update check-for-updates
 
-            # Wait for 5 seconds to allow the system to check for updates
-            :delay 5s;
+        # Wait for 5 seconds to allow the system to check for updates
+        :delay 5s;
 
-            :set deviceOsVerAvailable [/system package update get latest-version]
-            :set packageUpdateStatus [/system package update get status]
+        :local packageUpdateStatus "undefined"
 
-            if ($packageUpdateStatus = "New version is available") do={
-                :log info ("$SMP New RouterOS version is available: `$deviceOsVerAvailable`")
-                :set isNewOsUpdateAvailable true
-                :set isLatestOsAlreadyInstalled false
+        :set routerOsVersionAvailable [/system package update get latest-version]
+        :set packageUpdateStatus [/system package update get status]
+
+        if ($packageUpdateStatus = "New version is available") do={
+            :log info ("$SMP New RouterOS version is available: `$routerOsVersionAvailable`")
+            :set isNewOsUpdateAvailable true
+            :set isLatestOsAlreadyInstalled false
+        } else={
+            if ($packageUpdateStatus = "System is already up to date") do={
+                :log info ("$SMP No new RouterOS version is available, this device is already up to date: `$runningOsVersion`")
             } else={
-                if ($packageUpdateStatus = "System is already up to date") do={
-                    :log info ("$SMP No new RouterOS version is available, this device is already up to date: `$deviceOsVerInstalled`")
-                } else={
-                    :log error ("$SMP Failed to check for new RouterOS version. Package check status: `$packageUpdateStatus`")
-                }
+                :log error ("$SMP Failed to check for new RouterOS version. Package check status: `$packageUpdateStatus`")
             }
+        }
     }
 
-    # TODO Check for minor version updates
     if ($scriptMode = "osupdate" and $isNewOsUpdateAvailable = true) do={
-        :set isOsNeedsToBeUpdated true
+        if ($installOnlyPatchUpdates = true) do={
+            :if ([$FuncIsPatchUpdateOnly $runningOsVersion $routerOsVersionAvailable] = false) do={
+                :log info ("$SMP New RouterOS version is available, but it is not a patch update. Current version: `$runningOsVersion`, new version: `$routerOsVersionAvailable`.")
+                :set isOsNeedsToBeUpdated true
+            } else={
+                :log info ("$SMP New RouterOS version is available and it is a patch update. Current version: `$runningOsVersion`, new version: `$routerOsVersionAvailable`.")
+            }
+        } else={
+            :set isOsNeedsToBeUpdated true
+        }
     }
 
 
