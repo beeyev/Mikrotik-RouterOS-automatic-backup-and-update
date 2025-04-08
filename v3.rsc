@@ -86,7 +86,7 @@
     :local runningOsAndChannel [/system resource get version]
 
     :local spacePos [:find $runningOsAndChannel " "]
-    if ([:len $spacePos] = 0) do={
+    :if ([:len $spacePos] = 0) do={
         :log error "Bkp&Upd: Could not extract installed OS version string: `$runningOsAndChannel`. Script stopped."
         :error "Bkp&Upd: script stopped due to an error. Please check logs for more details."
     }
@@ -108,7 +108,7 @@
     :local exitErrorMessage "Bkp&Upd: script stopped due to an error. Please check logs for more details."
 
     :local open [:find $runningOsAndChannel "("]
-    if ([:len $open] = 0) do={
+    :if ([:len $open] = 0) do={
         :log error ($errorMessage . " (1)")
         :error $exitErrorMessage
     }
@@ -116,13 +116,13 @@
     :local rest [:pick $runningOsAndChannel ($open+1) [:len $runningOsAndChannel]]
 
     :local close [:find $rest ")"]
-    if ([:len $close] = 0) do={
+    :if ([:len $close] = 0) do={
         :log error ($errorMessage . " (2)")
         :error $exitErrorMessage
     }
 
     :local channel [:pick $rest 0 $close]
-    if ([:len $channel] = 0) do={
+    :if ([:len $channel] = 0) do={
         :log error ($errorMessage . " (3)")
         :error $exitErrorMessage
     }
@@ -176,8 +176,12 @@
 #    `backupPassword`           | string    |
 #    `sensitiveDataInConfig`    | boolean   |
 # Example:
-# :put [$FuncCreateBackups backupName="daily-backup"]
+# :put [$FuncCreateBackups "daily-backup"]
 :local FuncCreateBackups do={
+    :local backupName $1
+    :local backupPassword $2
+    :local sensitiveDataInConfig $3
+
     #Script messages prefix
     :local SMP "Bkp&Upd:"
     :log info ("$SMP global function `FuncCreateBackups` started, input: `$backupName`")
@@ -208,7 +212,7 @@
     :if ($sensitiveDataInConfig = true) do={
         :log info ("$SMP starting export config with sensitive data, backup name: `$backupName`")
         # Since RouterOS v7 it needs to be explicitly set that we want to export sensitive data
-        :if ([:pick [/system package update get installed-version] 0 1] < 7) do={
+        :if ([:pick [/system resource get version] 0 1] < 7) do={
             :execute "/export compact terse file=$backupName"
         } else={
             :execute "/export compact show-sensitive terse file=$backupName"
@@ -269,27 +273,27 @@
 }
 
 # Script mode validation
-if ($scriptMode != "backup" and $scriptMode != "osupdate" and $scriptMode != "osnotify") do={
+:if ($scriptMode != "backup" and $scriptMode != "osupdate" and $scriptMode != "osnotify") do={
     :log error ("$SMP Script parameter `\$scriptMode` is not set, or contains invalid value: `$scriptMode`. Script stopped.")
     :error $exitErrorMessage
 }
 
 # Update channel validation
-if ($updateChannel != "stable" and $updateChannel != "long-term" and $updateChannel != "testing" and $updateChannel != "development") do={
+:if ($updateChannel != "stable" and $updateChannel != "long-term" and $updateChannel != "testing" and $updateChannel != "development") do={
     :log error ("$SMP Script parameter `\$updateChannel` is not set, or contains invalid value: `$updateChannel`. Script stopped.")
     :error $exitErrorMessage
 }
 
 # Check if the script is set to install only patch updates and if the update channel is valid
-if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
-    if ($updateChannel != "stable" and $updateChannel != "long-term") do={
+:if ($scriptMode = "osupdate" and $installOnlyPatchUpdates = true) do={
+    :if ($updateChannel != "stable" and $updateChannel != "long-term") do={
         :log error ("$SMP Script is set to install only patch updates, but the update channel is not valid: `$updateChannel`. Only `stable` and `long-term` channels supported. Script stopped.")
         :error $exitErrorMessage
     }
 
     :local susRunningOsChannel [$FuncGetRunningOsChannel]
 
-    if ($susRunningOsChannel != "stable" and $susRunningOsChannel != "long-term") do={
+    :if ($susRunningOsChannel != "stable" and $susRunningOsChannel != "long-term") do={
         :log error ("$SMP Script is set to install only patch updates, but the installed RouterOS version is not from `stable` or `long-term` channel: `$susRunningOsChannel`. Script stopped.")
         :error $exitErrorMessage
     }
@@ -391,7 +395,7 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
 
     :if ($detectPublicIpAddress = true or $allowAnonymousStatisticsCollection = true) do={
         :if ($allowAnonymousStatisticsCollection = true) do={
-            :set telemetryDataQuery ("\?mode=" . $scriptMode . "&osver=" . $deviceOsVerInst . "&model=" . $deviceRbModel. "&step=" . $updateStep)
+            :set telemetryDataQuery ("\?mode=" . $scriptMode . "&osver=" . $runningOsVersion . "&model=" . $deviceRbModel. "&step=" . $updateStep)
         }
 
         :do {:set publicIpAddress ([/tool fetch http-method="get" url=($ipAddressDetectServiceDefault . $telemetryDataQuery) output=user as-value]->"data")} on-error={
@@ -427,7 +431,7 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
     :local isOsNeedsToBeUpdated false
 
     # Checking for new RouterOS version
-    if ($scriptMode = "osupdate" or $scriptMode = "osnotify") do={      
+    :if ($scriptMode = "osupdate" or $scriptMode = "osnotify") do={      
         log info ("$SMP Setting update channel to `$updateChannel`")
         /system package update set channel=$updateChannel
         log info ("$SMP Checking for new RouterOS version. Current installed version is: `$runningOsVersion`")
@@ -441,12 +445,12 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
         :set routerOsVersionAvailable [/system package update get latest-version]
         :set packageUpdateStatus [/system package update get status]
 
-        if ($packageUpdateStatus = "New version is available") do={
+        :if ($packageUpdateStatus = "New version is available") do={
             :log info ("$SMP New RouterOS version is available: `$routerOsVersionAvailable`")
             :set isNewOsUpdateAvailable true
             :set isLatestOsAlreadyInstalled false
         } else={
-            if ($packageUpdateStatus = "System is already up to date") do={
+            :if ($packageUpdateStatus = "System is already up to date") do={
                 :log info ("$SMP No new RouterOS version is available, this device is already up to date: `$runningOsVersion`")
             } else={
                 :log error ("$SMP Failed to check for new RouterOS version. Package check status: `$packageUpdateStatus`")
@@ -454,8 +458,8 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
         }
     }
 
-    if ($scriptMode = "osupdate" and $isNewOsUpdateAvailable = true) do={
-        if ($installOnlyPatchUpdates = true) do={
+    :if ($scriptMode = "osupdate" and $isNewOsUpdateAvailable = true) do={
+        :if ($installOnlyPatchUpdates = true) do={
             :if ([$FuncIsPatchUpdateOnly $runningOsVersion $routerOsVersionAvailable] = false) do={
                 :log info ("$SMP New RouterOS version is available, but it is not a patch update. Current version: `$runningOsVersion`, new version: `$routerOsVersionAvailable`.")
                 :set isOsNeedsToBeUpdated true
@@ -469,17 +473,17 @@ if ($scriptMode = "osupdate" and $installOnlyPatchUpdates=true) do={
 
 
     # Checking If the script needs to create a backup
-    if ($forceBackup = true or $scriptMode = "backup" or $isOsNeedsToBeUpdated = true) do={
+    :if ($forceBackup = true or $scriptMode = "backup" or $isOsNeedsToBeUpdated = true) do={
         :log info ("$SMP Starting backup process.")
 
         :local backupName $backupNameTemplate
 
         # This means it's the first step where we create a backup before the update process
-        if ($isOsNeedsToBeUpdated = true) do={
+        :if ($isOsNeedsToBeUpdated = true) do={
             :set backupName $backupNameBeforeUpdate
         }
 
-        :set mailAttachments [$FuncCreateBackups backupName=$backupName backupPassword=$backupPassword sensitiveDataInConfig=$sensitiveDataInConfig];
+        :set mailAttachments [$FuncCreateBackups $backupName $backupPassword $sensitiveDataInConfig];
     }
 }
 
