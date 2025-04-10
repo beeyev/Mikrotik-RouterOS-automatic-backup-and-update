@@ -458,7 +458,7 @@
 :local changelogUrl         "Check RouterOS changelog: https://mikrotik.com/download/changelogs/"
 
 :local mailBodyDeviceInfo  ""
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\n\nDevice information:")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "Device information:")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\n---------------------")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nName: $deviceIdentityName")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nModel: $deviceRbModel")
@@ -472,7 +472,6 @@
 # IP address will be appended later if needed
 
 :local mailAttachments  [:toarray ""]
-
 
 ## IP address detection & anonymous statistics collection
 :if ($updateStep = 1 or $updateStep = 3) do={
@@ -578,6 +577,7 @@
                 :set isOsNeedsToBeUpdated true
             } else={
                 :log info ("$SMP The script will not install this update, because it is not a patch update. Current version: `$runningOsVersion`, new version: `$routerOsVersionAvailable`.")
+                :set mailBodyPartAction ($mailBodyPartAction . "\nThis update will not be installed, because the script is set to install only patch updates.")
             }
         } else={
             :set isOsNeedsToBeUpdated true
