@@ -246,6 +246,83 @@
     :return $backupNames
 }
 
+# Function: FuncSendEmailSafe
+# ---------------------------
+# Sends an email and checks if it was sent successfully.
+#
+# Parameters:
+#    $1 - to (email address)
+#    $2 - subject
+#    $3 - body
+#    $4 - file attachments (optional; pass "" if not needed)
+#
+# Example:
+# :do {
+#     $FuncSendEmailSafe "admin@domain.com" "Backup Done" "Backup complete." "backup1.backup"
+# } on-error={
+#     :log error "Email failed to send"
+# }
+:local FuncSendEmailSafe do={
+
+    :local emailTo $1
+    :local emailSubject $2
+    :local emailBody $3
+    :local emailAttachments $4
+
+    :local SMP "Bkp&Upd:"
+    :local exitErrorMessage "$SMP script stopped due to an error. Please check logs for more details."
+
+    :log info "$SMP Attempting to send email to `$emailTo`"
+
+    # SAFETY: wait for any previously queued email to finish
+    :local waitTimeoutPre 60
+    :local waitCounterPre 0
+    :while (([/tool e-mail get last-status] = "resolving-dns" or [/tool e-mail get last-status] = "in-progress")) do={
+        :if ($waitCounterPre >= $waitTimeoutPre) do={
+            :log error "$SMP Email send aborted: previous send did not complete after $waitTimeoutPre seconds"
+            :error $exitErrorMessage
+        }
+
+        :log info "$SMP Waiting for previous email to finish (status: $[/tool e-mail get last-status])..."
+        :delay 1s
+        :set waitCounterPre ($waitCounterPre + 1)
+    }
+
+    # Send the email
+    :do {
+        /tool e-mail send to=$emailTo subject=$emailSubject body=$emailBody file=$emailAttachments
+    } on-error={
+        :log error "$SMP Email send command failed to execute. Check logs and verify email settings."
+        :error $exitErrorMessage
+    }
+
+    # Wait for send status to change from "in-progress" / "resolving-dns"
+    :local waitTimeout 60
+    :local waitCounter 0
+    :local emailStatus ""
+    :log info "$SMP Waiting for email to be sent, timeout in `$waitTimeout` seconds..."
+    :while ($waitCounter < $waitTimeout) do={
+        :set emailStatus [/tool e-mail get last-status]
+        :if ($emailStatus != "in-progress" and $emailStatus != "resolving-dns") do={
+            :log info "$SMP Email send status received: $emailStatus"
+
+            # exit loop
+            :set waitCounter $waitTimeout
+        } else={
+            :delay 1s
+            :set waitCounter ($waitCounter + 1)
+        }
+    }
+
+    # Final decision based on last status
+    :if ($emailStatus = "succeeded") do={
+        :log info  "$SMP Email sent successfully to `$emailTo` in `$waitCounter` seconds."
+    } else={
+        :log error "$SMP Email failed to send. Status: `$emailStatus`, waited `$waitCounter` seconds. Check logs for more details and verify email settings."
+        :error $exitErrorMessage
+    }
+}
+
 # Global variable to track current update step
 :global buGlobalVarUpdateStep
 :local updateStep $buGlobalVarUpdateStep
@@ -377,11 +454,11 @@
 :local mailSubject  "$SMP Device - $deviceIdentityNameShort."
 :local mailBodyMessage     ""
 
-:local mailBodyCopyright    "\n\nMikrotik RouterOS automatic backup & update (ver. $scriptVersion) \nhttps://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update"
+:local mailBodyCopyright    "Mikrotik RouterOS automatic backup & update (ver. $scriptVersion) \nhttps://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update"
 :local changelogUrl         "Check RouterOS changelog: https://mikrotik.com/download/changelogs/"
 
 :local mailBodyDeviceInfo  ""
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\n\nDevice information")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\n\nDevice information:")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\n---------------------")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nName: $deviceIdentityName")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nModel: $deviceRbModel")
@@ -390,7 +467,7 @@
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nRouterOS version: v$deviceOsVerAndChannelRunning")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nBuild time: $[/system resource get build-time]")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nRouterboard FW: $deviceRbCurrentFw")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nDate time: $rawDate $rawTime")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nDevice date-time: $rawDate $rawTime ($[/system clock get time-zone-name ])")
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nUptime: $[/system resource get uptime]")
 # IP address will be appended later if needed
 
@@ -444,6 +521,13 @@
     :local isLatestOsAlreadyInstalled true
     :local isOsNeedsToBeUpdated false
     :local isUpdateCheckSucceded false
+    :local isEmailNeedsToBeSent false
+
+    :local mailSubjectPartAction ""
+    :local mailBodyPartAction ""
+
+    :local mailPtSubjectBackup ""
+    :local mailPtBodyBackup ""
 
     # Checking for new RouterOS version
     :if ($scriptMode = "osupdate" or $scriptMode = "osnotify") do={      
@@ -465,18 +549,28 @@
             :set isNewOsUpdateAvailable true
             :set isLatestOsAlreadyInstalled false
             :set isUpdateCheckSucceded true
+            :set isEmailNeedsToBeSent true
+
+            :set mailSubjectPartAction "New RouterOS available"
+            :set mailBodyPartAction    "New RouterOS version is available, current version: `$runningOsVersion`, new version: `$routerOsVersionAvailable`. \n$changelogUrl"
         } else={
             :if ($packageUpdateStatus = "System is already up to date") do={
+                :log info ("$SMP No new RouterOS version is available, the latest version is already installed: `v$runningOsVersion`")
                 :set isUpdateCheckSucceded true
-                :log info ("$SMP No new RouterOS version is available, this device is already up to date: `$runningOsVersion`")
+
+                :set mailSubjectPartAction "No os update available"
+                :set mailBodyPartAction    "No new RouterOS version is available, the latest version is already installed: `v$runningOsVersion`"
             } else={
                 :log error ("$SMP Failed to check for new RouterOS version. Package check status: `$packageUpdateStatus`")
-                #:set mailSubject        ($mailSubject . " Error: Unable to Check RouterOS Version!")
-                #:set mailBodyMessage    ($mailBodyMessage . "An error occurred while checking for a new RouterOS version.\nStatus returned: `$packageUpdateStatus`\n\nPlease review the logs on the device for more details and verify internet connectivity.")
+                :set isEmailNeedsToBeSent true
+
+                :set mailSubjectPartAction "Error unable to check new os version"
+                :set mailBodyPartAction    "An error occurred while checking for a new RouterOS version.\nStatus returned: `$packageUpdateStatus`\n\nPlease review the logs on the device for more details and verify internet connectivity."
             }
         }
     }
 
+    # Checking if the script needs to install new RouterOS version
     :if ($scriptMode = "osupdate" and $isNewOsUpdateAvailable = true) do={
         :if ($installOnlyPatchUpdates = true) do={
             :if ([$FuncIsPatchUpdateOnly $runningOsVersion $routerOsVersionAvailable] = true) do={
@@ -495,14 +589,48 @@
     :if ($forceBackup = true or $scriptMode = "backup" or $isOsNeedsToBeUpdated = true) do={
         :log info ("$SMP Starting backup process.")
 
+        :set isEmailNeedsToBeSent true
+
         :local backupName $backupNameTemplate
 
         # This means it's the first step where we create a backup before the update process
         :if ($isOsNeedsToBeUpdated = true) do={
             :set backupName $backupNameBeforeUpdate
+
+            #Email body if the purpose of the script is to update the device
+            :set mailSubjectPartAction "Update preparation"
+            :set mailBodyPartAction ($mailBodyPartAction . "The update process for device '$deviceIdentityName' is scheduled to upgrade RouterOS from version v.$runningOsVersion to version v.$routerOsVersionAvailable (Update channel: $updateChannel)")
+            :set mailBodyPartAction ($mailBodyPartAction . "\nPlease note: The update will proceed only after a successful backup.")
+            :set mailBodyPartAction ($mailBodyPartAction . "\nA final report with detailed information will be sent once the update process is completed.")
+            :set mailBodyPartAction ($mailBodyPartAction . "\nIf you do not receive a second email within the next 10 minutes, there may be an issue. Please check your device logs for further information.")
         }
 
-        :set mailAttachments [$FuncCreateBackups $backupName $backupPassword $sensitiveDataInConfig];
+        :do {
+            :set mailAttachments [$FuncCreateBackups $backupName $backupPassword $sensitiveDataInConfig];
+            
+            :set mailPtSubjectBackup "Backup created"
+            :set mailPtBodyBackup "System backups have been successfully created and attached to this email."
+        } on-error={
+            #failed to create backup
+            :set isOsNeedsToBeUpdated false
+
+            :set mailPtSubjectBackup "Backup failed"
+            :set mailPtBodyBackup "The script failed to create backups. Please check device logs for more details."
+        }
+    }
+
+    :if ($isEmailNeedsToBeSent = true) do={
+        :log info ("$SMP Sending email notification...")
+        :set mailSubject ($mailSubject . " - " . $mailSubjectPartAction . " - " . $mailPtSubjectBackup)
+        :set mailBodyMessage ($mailBodyPartAction . "\n\n" . $mailPtBodyBackup . "\n\n" . $mailBodyDeviceInfo . "\n\n" . $mailBodyCopyright)
+
+        # Send email with backup files attached
+        :do {
+            $FuncSendEmailSafe $emailAddress $mailSubject $mailBodyMessage $mailAttachments
+        } on-error={
+            :log error "Email failed to send"
+        }
+        
     }
 }
 
