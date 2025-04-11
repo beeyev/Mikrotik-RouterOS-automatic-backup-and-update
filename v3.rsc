@@ -660,15 +660,7 @@
             /system scheduler add name=BKPUPD-NEXT-BOOT-TASK on-event=$scheduledCommand start-time=startup interval=0
 
             #/system package update install
-
             /system reboot
-
-            # :if ($isCloudHostedRouter = false) do={
-            #     /system scheduler add name=BKPUPD-UPGRADE-ON-NEXT-BOOT on-event=":delay 5s; /system scheduler remove BKPUPD-UPGRADE-ON-NEXT-BOOT; :global buGlobalVarScriptStep 2; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0;
-            # } else= {
-            #     :log info "$SMP The device is a cloud hosted router, the second step updating the Routerboard firmware will be skipped."
-            #     /system scheduler add name=BKPUPD-UPGRADE-ON-NEXT-BOOT on-event=":delay 5s; /system scheduler remove BKPUPD-UPGRADE-ON-NEXT-BOOT; :global buGlobalVarScriptStep 3; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0;
-            # }
         } on-error={
             # Failed to install new RouterOS version, remove the scheduled task
             :do {/system scheduler remove BKPUPD-NEXT-BOOT-TASK} on-error={}
@@ -686,11 +678,74 @@
     }
 }
 
-
+## STEP TWO: (after first reboot) routerboard firmware upgrade
+## Steps 2 and 3 are fired only if script is set to automatically update device and if new RouterOs is available.
 :if ($scriptStep = 2) do={
     :log info "$SMP The script is in the second step, updating Routerboard firmware."
+    ## RouterOS is the latest, let's check for upgraded routerboard firmware
+    if ($deviceRbCurrentFw != $deviceRbUpgradeFw) do={
+        :log info "$SMP Upgrading routerboard firmware from v.$deviceRbCurrentFw to v.$deviceRbUpgradeFw"
+
+        /system routerboard upgrade
+        ## Wait until the upgrade is completed
+        :delay 2s
+        :log info "$SMP routerboard upgrade process was completed, going to reboot in a moment!";
+
+        ## Set scheduled task to send final report on the next boot, task will be deleted when it is done. (That is why you should keep original script name)
+        /system scheduler add name=BKPUPD-NEXT-BOOT-TASK on-event=":delay 5s; /system scheduler remove BKPUPD-NEXT-BOOT-TASK; :global buGlobalVarUpdateStep 3; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0
+        
+        ## Reboot system to boot with new firmware
+        /system reboot;
+    } else={
+        :log info "$SMP It appears that your routerboard is already up to date, skipping this step";
+        :set scriptStep 3;
+    };
 }
 
-# Remove functions from global environment to keep it fresh and clean.
-# :do {/system script environment remove FuncIsPatchUpdateOnly} on-error={}
-# :do {/system script environment remove FuncCreateBackups} on-error={}
+## STEP THREE: Last step (after second reboot) sending final report
+## Steps 2 and 3 are fired only if script is set to automatically update device and if new RouterOs is available.
+## This step is executed after some delay
+:if ($updateStep = 3) do={
+    :log info ("$SMP The script is in the third step, sending final report.")
+
+    :global buGlobalVarTargetOsVersion
+    :local targetOsVersion $buGlobalVarScriptStep
+    :do {/system script environment remove buGlobalVarTargetOsVersion} on-error={}
+
+
+    :local mailStep3Subject $mailSubjectPrefix
+    :local mailStep3Body    ""
+
+    :if ($targetOsVersion = $runningOsVersion) do={
+        :log info "$SMP The script has successfully verified that the new RouterOS version was installed, target version: `$targetOsVersion`, current version: `$runningOsVersion`"
+
+        :set mailStep3Subject ($mailStep3Subject . " - Update completed - Backup created")
+        :set mailStep3Body ($mailStep3Body . "RouterOS and routerboard upgrade process was completed")
+        :set mailStep3Body ($mailStep3Body . "\nNew RouterOS version: v.$targetOsVersion, routerboard firmware: v.$deviceRbCurrentFw")
+        :set mailStep3Body ($mailStep3Body . "\n$changelogUrl")
+        :set mailStep3Body ($mailStep3Body . "\nBackups of the upgraded system are in the attachment of this email.")
+        :set mailStep3Body ($mailStep3Body . "\n\n" . $mailBodyDeviceInfo . "\n\n" . $mailBodyCopyright)
+
+        :set mailAttachments [$FuncCreateBackups $backupNameAfterUpdate $backupPassword $sensitiveDataInConfig];
+
+        # Send email with final report
+        #$FuncSendEmailSafe $emailAddress $mailStep3Subject $mailStep3Body ""
+    } else={
+        :log error "$SMP The script was unable to verify that the new RouterOS version was installed, target version: `$targetOsVersion`, current version: `$runningOsVersion`"
+        :set mailStep3Subject ($mailStep3Subject . " - Update failed")
+        
+        :set mailStep3Body ($mailStep3Body . "The script was unable to verify that the new RouterOS version was installed, target version: `$targetOsVersion`, current version: `$runningOsVersion`")
+        :set mailStep3Body ($mailStep3Body . "\nPlease check device logs for more details.")
+        :set mailStep3Body ($mailStep3Body . "\n\n" . $mailBodyDeviceInfo . "\n\n" . $mailBodyCopyright)
+    }
+
+    $FuncSendEmailSafe $emailAddress $mailStep3Subject $mailStep3Body $mailAttachments
+
+    :if ([:len $mailAttachments] > 0) do={
+        :log info "$SMP Cleaning up backup files from the file system..."
+        /file remove $mailAttachments;
+        :delay 2s;
+    }
+
+    :log info "$SMP Final report email sent successfully, and the script has finished."
+}
