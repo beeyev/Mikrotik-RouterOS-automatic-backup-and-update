@@ -48,7 +48,7 @@
 ## Means that new update will be installed only if MAJOR and MINOR version numbers remained the same as currently installed RouterOS.
 ## Example: v6.43.6 => major.minor.PATCH
 ## Script will send information if new version is greater than just patch.
-:local installOnlyPatchUpdates false
+:local installOnlyPatchUpdates true
 
 ## If true, device public IP address information will be included into the email message
 :local detectPublicIpAddress true
@@ -452,7 +452,6 @@
 ## Email body template
 
 :local mailSubjectPrefix    "$SMP Device - `$deviceIdentityNameShort`"
-:local mailBodyMessage      ""
 
 :local mailBodyCopyright    "Mikrotik RouterOS automatic backup & update (ver. $scriptVersion) \nhttps://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update"
 :local changelogUrl         "Check RouterOS changelog: https://mikrotik.com/download/changelogs/"
@@ -521,7 +520,7 @@
     :local isEmailNeedsToBeSent false
 
     :local mailSubjectPartAction ""
-    :local mailBodyPartAction ""
+    :local mailPtBodyAction ""
 
     :local mailPtSubjectBackup ""
     :local mailPtBodyBackup ""
@@ -549,20 +548,20 @@
             :set isEmailNeedsToBeSent true
 
             :set mailSubjectPartAction "New RouterOS available"
-            :set mailBodyPartAction    "New RouterOS version is available, current version: `$runningOsVersion`, new version: `$routerOsVersionAvailable`. \n$changelogUrl"
+            :set mailPtBodyAction    "New RouterOS version is available, current version: v$runningOsVersion, new version: v$routerOsVersionAvailable. \n$changelogUrl"
         } else={
             :if ($packageUpdateStatus = "System is already up to date") do={
                 :log info ("$SMP No new RouterOS version is available, the latest version is already installed: `v$runningOsVersion`")
                 :set isUpdateCheckSucceeded true
 
                 :set mailSubjectPartAction "No os update available"
-                :set mailBodyPartAction    "No new RouterOS version is available, the latest version is already installed: `v$runningOsVersion`"
+                :set mailPtBodyAction    "No new RouterOS version is available, the latest version is already installed: `v$runningOsVersion`"
             } else={
                 :log error ("$SMP Failed to check for new RouterOS version. Package check status: `$packageUpdateStatus`")
                 :set isEmailNeedsToBeSent true
 
                 :set mailSubjectPartAction "Error unable to check new os version"
-                :set mailBodyPartAction    "An error occurred while checking for a new RouterOS version.\nStatus returned: `$packageUpdateStatus`\n\nPlease review the logs on the device for more details and verify internet connectivity."
+                :set mailPtBodyAction    "An error occurred while checking for a new RouterOS version.\nStatus returned: `$packageUpdateStatus`\n\nPlease review the logs on the device for more details and verify internet connectivity."
             }
         }
     }
@@ -571,11 +570,11 @@
     :if ($scriptMode = "osupdate" and $isNewOsUpdateAvailable = true) do={
         :if ($installOnlyPatchUpdates = true) do={
             :if ([$FuncIsPatchUpdateOnly $runningOsVersion $routerOsVersionAvailable] = true) do={
-                :log info ("$SMP New RouterOS version is available, and it is a patch update. Current version: `$runningOsVersion`, new version: `$routerOsVersionAvailable`.")
+                :log info "$SMP New RouterOS version is available, and it is a patch update. Current version: v$runningOsVersion, new version: v$routerOsVersionAvailable"
                 :set isOsNeedsToBeUpdated true
             } else={
-                :log info ("$SMP The script will not install this update, because it is not a patch update. Current version: `$runningOsVersion`, new version: `$routerOsVersionAvailable`.")
-                :set mailBodyPartAction ($mailBodyPartAction . "\nThis update will not be installed, because the script is set to install only patch updates.")
+                :log info "$SMP The script will not install this update, because it is not a patch update. Current version: v$runningOsVersion, new version: v$routerOsVersionAvailable"
+                :set mailPtBodyAction ($mailPtBodyAction . "\nThis update will not be installed, because the script is set to install only patch updates.")
             }
         } else={
             :set isOsNeedsToBeUpdated true
@@ -597,10 +596,10 @@
 
             #Email body if the purpose of the script is to update the device
             :set mailSubjectPartAction "Update preparation"
-            :set mailBodyPartAction ($mailBodyPartAction . "\nThe update process for device '$deviceIdentityName' is scheduled to upgrade RouterOS from version v.$runningOsVersion to version v.$routerOsVersionAvailable (Update channel: $updateChannel)")
-            :set mailBodyPartAction ($mailBodyPartAction . "\nPlease note: The update will proceed only after a successful backup.")
-            :set mailBodyPartAction ($mailBodyPartAction . "\nA final report with detailed information will be sent once the update process is completed.")
-            :set mailBodyPartAction ($mailBodyPartAction . "\nIf you do not receive a second email within the next 10 minutes, there may be an issue. Please check your device logs for further information.")
+            :set mailPtBodyAction ($mailPtBodyAction . "\nThe update process for device '$deviceIdentityName' is scheduled to upgrade RouterOS from version v.$runningOsVersion to version v.$routerOsVersionAvailable (Update channel: $updateChannel)")
+            :set mailPtBodyAction ($mailPtBodyAction . "\nPlease note: The update will proceed only after a successful backup.")
+            :set mailPtBodyAction ($mailPtBodyAction . "\nA final report with detailed information will be sent once the update process is completed.")
+            :set mailPtBodyAction ($mailPtBodyAction . "\nIf you do not receive a second email within the next 10 minutes, there may be an issue. Please check your device logs for further information.")
         }
 
         :do {
@@ -622,27 +621,28 @@
     :if ($isEmailNeedsToBeSent = true) do={
         :log info "$SMP Preparing to send email..."
         
-        :local mailSubject $mailSubjectPrefix
+        :local mailStep1Subject $mailSubjectPrefix
+        :local mailStep1Body    "" 
         
         # Assemble email subject
         :if ($mailSubjectPartAction != "") do={
-            :set mailSubject ($mailSubject . " - " . $mailSubjectPartAction)
+            :set mailStep1Subject ($mailStep1Subject . " - " . $mailSubjectPartAction)
         }
         :if ($mailPtSubjectBackup != "") do={
-            :set mailSubject ($mailSubject . " - " . $mailPtSubjectBackup)
+            :set mailStep1Subject ($mailStep1Subject . " - " . $mailPtSubjectBackup)
         }
         # Assemble email body
-        :if ($mailBodyPartAction != "") do={
-            :set mailBodyMessage ($mailBodyMessage . $mailBodyPartAction . "\n\n")
+        :if ($mailPtBodyAction != "") do={
+            :set mailStep1Body ($mailStep1Body . $mailPtBodyAction . "\n\n")
         }
         :if ($mailPtBodyBackup != "") do={
-            :set mailBodyMessage ($mailBodyMessage . $mailPtBodyBackup . "\n\n")
+            :set mailStep1Body ($mailStep1Body . $mailPtBodyBackup . "\n\n")
         }
-        :set mailBodyMessage ($mailBodyMessage . $mailBodyDeviceInfo . "\n\n" . $mailBodyCopyright)
+        :set mailStep1Body ($mailStep1Body . $mailBodyDeviceInfo . "\n\n" . $mailBodyCopyright)
 
         # Send email with backup files attached
         :do {
-            $FuncSendEmailSafe $emailAddress $mailSubject $mailBodyMessage $mailAttachments
+            $FuncSendEmailSafe $emailAddress $mailStep1Subject $mailStep1Body $mailAttachments
         } on-error={
             :set isOsNeedsToBeUpdated false
             :log error "$SMP The script will not proceed with the update process, because the email was not sent."
@@ -663,7 +663,12 @@
         } on-error={
             :log error "$SMP Failed to install new RouterOS version. Please check device logs for more details."
 
-            :set mailBodyMessage ($mailBodyMessage . "\n\nUpdate process failed. Please check device logs for more details.")
+            :local mailUpdateErrorSubject ($mailSubjectPrefix . " - Update failed")
+            :local mailUpdateErrorBody "The script was unable to install new RouterOS version. Please check device logs for more details."
+
+            # Send email with error message
+            $FuncSendEmailSafe $emailAddress $mailUpdateErrorSubject $mailUpdateErrorBody ""
+
             :error $exitErrorMessage
         }
     }
