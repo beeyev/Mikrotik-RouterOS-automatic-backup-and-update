@@ -324,6 +324,9 @@
 }
 
 # Global variable to track current update step
+# They need to be initialized here first to be available in the script
+:global buGlobalVarTargetOsVersion
+
 :global buGlobalVarScriptStep
 :local scriptStep $buGlobalVarScriptStep
 :do {/system script environment remove buGlobalVarScriptStep} on-error={}
@@ -659,8 +662,7 @@
             :local scheduledCommand (":delay 5s; /system scheduler remove BKPUPD-NEXT-BOOT-TASK; :global buGlobalVarScriptStep $nextStep; :global buGlobalVarTargetOsVersion \"$routerOsVersionAvailable\"; :delay 10s; /system script run BackupAndUpdate;")
             /system scheduler add name=BKPUPD-NEXT-BOOT-TASK on-event=$scheduledCommand start-time=startup interval=0
 
-            #/system package update install
-            /system reboot
+            /system package update install
         } on-error={
             # Failed to install new RouterOS version, remove the scheduled task
             :do {/system scheduler remove BKPUPD-NEXT-BOOT-TASK} on-error={}
@@ -691,7 +693,7 @@
     :log info "$SMP routerboard upgrade process was completed, going to reboot in a moment!";
 
     ## Set scheduled task to send final report on the next boot, task will be deleted when it is done. (That is why you should keep original script name)
-    /system scheduler add name=BKPUPD-NEXT-BOOT-TASK on-event=":delay 5s; /system scheduler remove BKPUPD-NEXT-BOOT-TASK; :global buGlobalVarScriptStep 3; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0
+    /system scheduler add name=BKPUPD-NEXT-BOOT-TASK on-event=":delay 5s; /system scheduler remove BKPUPD-NEXT-BOOT-TASK; :global buGlobalVarScriptStep 3; :global buGlobalVarTargetOsVersion \"$buGlobalVarTargetOsVersion\"; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0
     
     ## Reboot system to boot with new firmware
     /system reboot;
@@ -702,11 +704,12 @@
 ## This step is executed after some delay
 :if ($scriptStep = 3) do={
     :log info ("$SMP The script is in the third step, sending final report.")
-
-    :global buGlobalVarTargetOsVersion
+    
     :local targetOsVersion $buGlobalVarTargetOsVersion
     :do {/system script environment remove buGlobalVarTargetOsVersion} on-error={}
-
+    :if ([:len $targetOsVersion] = 0) do={
+        :log warning "$SMP Something is wrong, the script was unable to get the target updated OS version from the global variable."
+    }
 
     :local mailStep3Subject $mailSubjectPrefix
     :local mailStep3Body    ""
