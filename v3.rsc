@@ -625,25 +625,16 @@
         :local mailStep1Body    "" 
         
         # Assemble email subject
-        :if ($mailSubjectPartAction != "") do={
-            :set mailStep1Subject ($mailStep1Subject . " - " . $mailSubjectPartAction)
-        }
-        :if ($mailPtSubjectBackup != "") do={
-            :set mailStep1Subject ($mailStep1Subject . " - " . $mailPtSubjectBackup)
-        }
+        :if ($mailSubjectPartAction != "")  do={:set mailStep1Subject ($mailStep1Subject . " - " . $mailSubjectPartAction)}
+        :if ($mailPtSubjectBackup != "")    do={:set mailStep1Subject ($mailStep1Subject . " - " . $mailPtSubjectBackup)}
         # Assemble email body
-        :if ($mailPtBodyAction != "") do={
-            :set mailStep1Body ($mailStep1Body . $mailPtBodyAction . "\n\n")
-        }
-        :if ($mailPtBodyBackup != "") do={
-            :set mailStep1Body ($mailStep1Body . $mailPtBodyBackup . "\n\n")
-        }
+        :if ($mailPtBodyAction != "") do={:set mailStep1Body ($mailStep1Body . $mailPtBodyAction . "\n\n")}
+        :if ($mailPtBodyBackup != "") do={:set mailStep1Body ($mailStep1Body . $mailPtBodyBackup . "\n\n")}
+
         :set mailStep1Body ($mailStep1Body . $mailBodyDeviceInfo . "\n\n" . $mailBodyCopyright)
 
         # Send email with backup files attached
-        :do {
-            $FuncSendEmailSafe $emailAddress $mailStep1Subject $mailStep1Body $mailAttachments
-        } on-error={
+        :do {$FuncSendEmailSafe $emailAddress $mailStep1Subject $mailStep1Body $mailAttachments} on-error={
             :set isOsNeedsToBeUpdated false
             :log error "$SMP The script will not proceed with the update process, because the email was not sent."
             #:error $exitErrorMessage
@@ -659,8 +650,29 @@
     :if ($isOsNeedsToBeUpdated = true) do={
         :log info "$SMP everything is ready to install new RouterOS, going to start the update process and reboot the device."
         :do {
-            /system package update install
+            :local nextStep 2
+            :if ($isCloudHostedRouter = true) do={
+                :log info "$SMP The device is a cloud hosted router, the second step updating the Routerboard firmware will be skipped."
+                :set nextStep 3
+            } 
+
+            :local scheduledCommand (":delay 5s; /system scheduler remove BKPUPD-NEXT-BOOT-TASK; :global buGlobalVarScriptStep $nextStep; :global buGlobalVarTargetOsVersion \"$routerOsVersionAvailable\"; :delay 10s; /system script run BackupAndUpdate;")
+            /system scheduler add name=BKPUPD-NEXT-BOOT-TASK on-event=$scheduledCommand start-time=startup interval=0
+
+            #/system package update install
+
+            /system reboot
+
+            # :if ($isCloudHostedRouter = false) do={
+            #     /system scheduler add name=BKPUPD-UPGRADE-ON-NEXT-BOOT on-event=":delay 5s; /system scheduler remove BKPUPD-UPGRADE-ON-NEXT-BOOT; :global buGlobalVarScriptStep 2; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0;
+            # } else= {
+            #     :log info "$SMP The device is a cloud hosted router, the second step updating the Routerboard firmware will be skipped."
+            #     /system scheduler add name=BKPUPD-UPGRADE-ON-NEXT-BOOT on-event=":delay 5s; /system scheduler remove BKPUPD-UPGRADE-ON-NEXT-BOOT; :global buGlobalVarScriptStep 3; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0;
+            # }
         } on-error={
+            # Failed to install new RouterOS version, remove the scheduled task
+            :do {/system scheduler remove BKPUPD-NEXT-BOOT-TASK} on-error={}
+
             :log error "$SMP Failed to install new RouterOS version. Please check device logs for more details."
 
             :local mailUpdateErrorSubject ($mailSubjectPrefix . " - Update failed")
@@ -672,6 +684,11 @@
             :error $exitErrorMessage
         }
     }
+}
+
+
+:if ($scriptStep = 2) do={
+    :log info "$SMP The script is in the second step, updating Routerboard firmware."
 }
 
 # Remove functions from global environment to keep it fresh and clean.
