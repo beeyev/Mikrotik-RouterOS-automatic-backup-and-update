@@ -28,11 +28,11 @@
 #
 # osnotify  -   The script will send email notifications only (without backups) if a new RouterOS update is available.
 #               Change parameter `forceBackup` if you need the script to create backups every time when it runs.
-:local scriptMode "osupdate"
+:local scriptMode "osnotify"
 
 ## Additional parameter if you set `scriptMode` to `osupdate` or `osnotify`
 # Set `true` if you want the script to perform backup every time its fired, whatever script mode is set.
-:local forceBackup true
+:local forceBackup false
 
 ## Backup encryption password, no encryption if no password.
 :local backupPassword ""
@@ -416,9 +416,7 @@
 ## Combine date and time → `YYYY-MM-DD-hh-mm-ss` or `YYYY-Mon-DD-hh-mm-ss`
 :local currentDateTime ($currentDate . "-" . $currentTime)
 
-
 #####
-
 
 :local deviceBoardName [/system resource get board-name]
 
@@ -743,3 +741,5 @@
 
     :log info "$SMP Final report email sent successfully, and the script has finished."
 }
+
+:log info "$SMP the script has finished, script step: `$scriptStep` \n\n"
