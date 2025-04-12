@@ -3,9 +3,9 @@
 #----------SCRIPT INFORMATION---------------------------------------------------
 #
 # Script:  Mikrotik RouterOS automatic backup & update
-# Version: 24.06.04
+# Version: 25.04.12
 # Created: 07/08/2018
-# Updated: 04/06/2024
+# Updated: 12/04/2025
 # Author:  Alexander Tebiev
 # Website: https://github.com/beeyev
 # You can contact me by e-mail at tebiev@mail.com
@@ -32,7 +32,7 @@
 
 ## Additional parameter if you set `scriptMode` to `osupdate` or `osnotify`
 # Set `true` if you want the script to perform backup every time its fired, whatever script mode is set.
-:local forceBackup false
+:local forceBackup true
 
 ## Backup encryption password, no encryption if no password.
 :local backupPassword ""
@@ -43,24 +43,24 @@
 ## Update channel. Possible values: stable, long-term, testing, development
 :local updateChannel "stable"
 
-## Installs only patch versions of RouterOS updates.
-## Works only if you set scriptMode to "osupdate"
-## Means that new update will be installed only if MAJOR and MINOR version numbers remained the same as currently installed RouterOS.
-## Example: v6.43.6 => major.minor.PATCH
+## Install only patch updates (requires scriptMode = "osupdate")
+## Works only for `stable` and `long-term` channels.
+## Update will run only if MAJOR and MINOR versions match the current one
+## Example: current = v6.43.2 → v6.43.6 = allowed, v6.44.1 = skipped
 ## Script will send information if new version is greater than just patch.
-:local installOnlyPatchUpdates true
+:local installOnlyPatchUpdates false
 
 ## If true, device public IP address information will be included into the email message
 :local detectPublicIpAddress true
 
-## Allow anonymous statistics collection. (script mode, device model, OS version)
+## Allow anonymous statistics collection. (script mode and generic non-sensitive device info)
 :local allowAnonymousStatisticsCollection true
 
 ##------------------------------------------------------------------------------------------##
 #  !!!! DO NOT CHANGE ANYTHING BELOW THIS LINE, IF YOU ARE NOT SURE WHAT YOU ARE DOING !!!!  #
 ##------------------------------------------------------------------------------------------##
 
-:local scriptVersion "24.06.04"
+:local scriptVersion "25.04.12"
 
 # default and fallback public IP detection services
 :local ipAddressDetectServiceDefault "https://ipv4.mikrotik.ovh/"
@@ -70,9 +70,8 @@
 :local SMP "Bkp&Upd:"
 
 :local exitErrorMessage "$SMP script stopped due to an error. Please check logs for more details."
-:log info "\n$SMP Script \"Mikrotik RouterOS automatic backup & update\" v.$scriptVersion started."
-# TODO Improve this line
-#:log info "$SMP Script Mode: `$scriptMode`, forceBackup: `$forceBackup`"
+:log info "\n\n$SMP Script \"Mikrotik RouterOS automatic backup & update\" v.$scriptVersion started."
+:log info "$SMP Script Mode: `$scriptMode`, Update channel: `$updateChannel`, Force backup: `$forceBackup`, Install only patch updates: `$installOnlyPatchUpdates`"
 
 ############### vvvvvvvvv FUNCTIONS vvvvvvvvv ###############
 
@@ -487,7 +486,7 @@
 
     :if ($detectPublicIpAddress = true or $allowAnonymousStatisticsCollection = true) do={
         :if ($allowAnonymousStatisticsCollection = true) do={
-            :set telemetryDataQuery ("\?mode=" . $scriptMode . "&osver=" . $runningOsVersion . "&model=" . $deviceRbModel. "&step=" . $scriptStep)
+            :set telemetryDataQuery ("\?mode=" . $scriptMode . "&scriptver=" . $scriptVersion . "&updatechannel=" . $updateChannel . "&osver=" . $runningOsVersion . "&step=" . $scriptStep . "&forcebackup=" . $forceBackup . "&onlypatchupdates=" . $installOnlyPatchUpdates . "&model=" . $deviceRbModel . "&deviceboard=" . $deviceBoardName)
         }
 
         :do {:set publicIpAddress ([/tool fetch http-method="get" url=($ipAddressDetectServiceDefault . $telemetryDataQuery) output=user as-value]->"data")} on-error={
