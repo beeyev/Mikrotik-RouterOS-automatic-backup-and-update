@@ -2,7 +2,7 @@
 
 This script allows you to generate daily backups of MikroTik and send them to an email address. You can also choose to enable automatic RouterOS upgrades or receive notifications exclusively for new firmware versions.
 
-
+> ‼️Use [WinBox 4.0](https://mikrotik.com/download), to update the script  
 > 💡 If you have any ideas about the script or you just want to share your opinion, you are welcome to [Discussions](https://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update/discussions), or you can open an [issue](https://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update/issues) if you found a bug.
 
 
@@ -21,6 +21,8 @@ This script allows you to generate daily backups of MikroTik and send them to an
 **Backups and automatic RouterOS upgrade** - The script begins by creating a backup, followed by a check for any new versions of RouterOS. If a newer firmware version is detected, the script initiates the upgrade process. Upon completion, two emails are sent: the first includes the system backups from the prior RouterOS version, and the second, sent post-upgrade, contains backups of the updated system.
 
 ## How to use
+> ‼️Use [WinBox 4.0](https://mikrotik.com/download), to update the script  
+
 > ❗️ **Important**  
 > Ensure your device identity does not contain spaces and special characters! `System -> Identity`
 
