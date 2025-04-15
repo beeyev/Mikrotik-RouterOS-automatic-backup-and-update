@@ -1,6 +1,6 @@
 # Script name: BackupAndUpdate
 #
-#----------SCRIPT INFORMATION---------------------------------------------------
+# SCRIPT INFORMATION
 #
 # Script:  Mikrotik RouterOS automatic backup & update
 # Version: 25.04.12
@@ -13,7 +13,7 @@
 # IMPORTANT!
 # Minimum supported RouterOS version is v6.43.7
 #
-#----------MODIFY THIS SECTION AS NEEDED----------------------------------------
+# --- MODIFY THIS SECTION AS NEEDED ---
 # Notification e-mail
 # (Make sure you have configured Email settings in Tools -> Email)
 :local emailAddress "yourmail@example.com";
@@ -335,7 +335,7 @@
   :error $exitErrorMessage
 }
 
-# Check if the script is set to install only patch updates and if the update channel is valid
+# Verify if script is set to install patch updates and if the update channel is valid
 :if ($scriptMode = "osupdate" and $installOnlyPatchUpdates = true) do={
   :if ($updateChannel != "stable" and $updateChannel != "long-term") do={
     :log error ("$SMP Patch-only updates enabled, but update channel `$updateChannel` is invalid. Only `stable` and `long-term` are supported. Script stopped")
@@ -351,18 +351,18 @@
 }
 
 #
-# Get current system date and time
+# Get current date and time
 #
 :local rawTime [/system clock get time]
 :local rawDate [/system clock get date]
 
-## Current time in specific format `hh-mm-ss`
+# Current time in specific format `hh-mm-ss`
 :local currentTime ([:pick $rawTime 0 2] . "-" . [:pick $rawTime 3 5] . "-" . [:pick $rawTime 6 8])
 
-## Current date `YYYY-MM-DD` or `YYYY-Mon-DD`, will be defined later in the script
+# Current date `YYYY-MM-DD` or `YYYY-Mon-DD`
 :local currentDate "undefined"
 
-## Check if the date is in the old format, it should not start with a number
+# Check if the date is in the old format
 :if ([:len [:tonum [:pick $rawDate 0 1]]] = 0) do={
   # Convert old format `nov/11/2023` → `2023-nov-11`
   :set currentDate ([:pick $rawDate 7 11] . "-" . [:pick $rawDate 0 3] . "-" . [:pick $rawDate 4 6])
@@ -371,10 +371,7 @@
   :set currentDate $rawDate
 }
 
-## Combine date and time
 :local currentDateTime ($currentDate . "-" . $currentTime)
-
-##
 
 :local deviceBoardName [/system resource get board-name]
 
@@ -430,13 +427,13 @@
 
 :local mailAttachments  [:toarray ""]
 
-## IP address detection & anonymous statistics collection
+## IP address detection
 :if ($scriptStep = 1 or $scriptStep = 3) do={
   :if ($scriptStep = 3) do={
     :log info ("$SMP Waiting for one minute before continuing to the final step.")
     :delay 1m
   }
-  # default values, to be set later
+  # default values
   :local publicIpAddress "not-detected"
   :local telemetryDataQuery ""
 
@@ -447,8 +444,8 @@
 
     :do {:set publicIpAddress ([/tool fetch http-method="get" url=($ipAddressDetectServiceDefault . $telemetryDataQuery) output=user as-value]->"data")} on-error={
       :if ($detectPublicIpAddress = true) do={
-        :log warning "$SMP Could not detect public IP address using default detection service: `$ipAddressDetectServiceDefault`"
-        :log warning "$SMP Trying to detect public IP using fallback detection service: `$ipAddressDetectServiceFallback`"
+        :log warning "$SMP Failed to detect public IP using default service: `$ipAddressDetectServiceDefault`"
+        :log warning "$SMP Trying fallback service: `$ipAddressDetectServiceFallback`"
 
         :do {:set publicIpAddress ([/tool fetch http-method="get" url=$ipAddressDetectServiceFallback output=user as-value]->"data")} on-error={
           :log warning "$SMP Could not detect public IP address using fallback detection service: `$ipAddressDetectServiceFallback`"
@@ -571,7 +568,7 @@
       :set mailPtSubjectBackup "Backup failed"
       :set mailPtBodyBackup "The script failed to create backups. Please check device logs for more details."
 
-      :log warning "$SMP Failed to create backup files. Update process will be cancelled, if the script is set to update the device."
+      :log warning "$SMP Backup creation failed. Update process will be canceled if automatic update is enabled"
     }
   }
 
@@ -641,14 +638,13 @@
   :log info "$SMP Upgrading routerboard firmware from v.$deviceRbCurrentFw to v.$deviceRbUpgradeFw"
 
   /system routerboard upgrade
-  ## Wait until the upgrade is completed
   :delay 2s
+
   :log info "$SMP routerboard upgrade process was completed, going to reboot in a moment!";
 
-  ## Set scheduled task to send final report on the next boot
+  ## Set task to send final report on the next boot
   /system scheduler add name=BKPUPD-NEXT-BOOT-TASK on-event=":delay 5s; /system scheduler remove BKPUPD-NEXT-BOOT-TASK; :global buGlobalVarScriptStep 3; :global buGlobalVarTargetOsVersion \"$buGlobalVarTargetOsVersion\"; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0
 
-  ## Reboot system to boot with new firmware
   /system reboot;
 }
 
@@ -667,23 +663,19 @@
   :local mailStep3Body  ""
 
   :if ($targetOsVersion = $runningOsVersion) do={
-    :log info "$SMP The script has successfully verified that the new RouterOS version was installed, target version: `$targetOsVersion`, current version: `$runningOsVersion`"
+    :log info "$SMP Successfully verified new RouterOS version: target: `$targetOsVersion`, current: `$runningOsVersion`"
 
     :set mailStep3Subject ($mailStep3Subject . " - Update completed - Backup created")
     :set mailStep3Body ($mailStep3Body . "RouterOS and routerboard upgrade process was completed")
     :set mailStep3Body ($mailStep3Body . "\nNew RouterOS version: v.$targetOsVersion, routerboard firmware: v.$deviceRbCurrentFw")
-    :set mailStep3Body ($mailStep3Body . "\n$changelogUrl")
-    :set mailStep3Body ($mailStep3Body . "\nBackups of the upgraded system are in the attachment of this email.")
-    :set mailStep3Body ($mailStep3Body . "\n\n" . $mailBodyDeviceInfo . "\n\n" . $mailBodyCopyright)
+    :set mailStep3Body ($mailStep3Body . "\n$changelogUrl\nBackups of the upgraded system are in the attachment of this email.\n\n$mailBodyDeviceInfo\n\n$mailBodyCopyright")
 
     :set mailAttachments [$FuncCreateBackups $backupNameAfterUpdate $backupPassword $sensitiveDataInConfig];
   } else={
-    :log error "$SMP The script was unable to verify that the new RouterOS version was installed, target version: `$targetOsVersion`, current version: `$runningOsVersion`"
+    :log error "$SMP Failed to verify new RouterOS version: target: `$targetOsVersion`, current: `$runningOsVersion`"
     :set mailStep3Subject ($mailStep3Subject . " - Update failed")
 
-    :set mailStep3Body ($mailStep3Body . "The script was unable to verify that the new RouterOS version was installed, target version: `$targetOsVersion`, current version: `$runningOsVersion`")
-    :set mailStep3Body ($mailStep3Body . "\nPlease check device logs for more details.")
-    :set mailStep3Body ($mailStep3Body . "\n\n" . $mailBodyDeviceInfo . "\n\n" . $mailBodyCopyright)
+    :set mailStep3Body ($mailStep3Body . "The script was unable to verify that the new RouterOS version was installed, target version: `$targetOsVersion`, current version: `$runningOsVersion`\nCheck device logs for more details.\n\n$mailBodyDeviceInfo\n\n$mailBodyCopyright")
   }
 
   $FuncSendEmailSafe $emailAddress $mailStep3Subject $mailStep3Body $mailAttachments
