@@ -23,7 +23,7 @@ This script allows you to generate daily backups of MikroTik and send them to an
 > Ensure your device identity does not contain spaces and special characters! `System -> Identity`
 
 ##### 1. Configure parameters
-Take the  [script](https://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update/raw/master/BackupAndUpdate.rsc) and configure it's parameters at the begining of the file.  
+Take the  [script](https://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update/raw/master/BackupAndUpdate.rsc) and configure it's parameters at the beginning of the file.  
 This step is straightforward as all parameters are well-commented.
 **Important!** Don't forget to provide correct email address for backups and pay attention to `scriptMode` variable.
 
