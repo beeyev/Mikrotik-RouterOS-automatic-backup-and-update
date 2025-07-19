@@ -189,7 +189,7 @@
   :log info ("$SMP Config export complete: `$backupFileConfig`")
   :log info ("$SMP Waiting a little to ensure backup files are written")
 
-  :delay 20s
+  :delay 40s
 
   :if ([:len [/file find name=$backupFileSys]] > 0) do={
     :log info ("$SMP system backup file successfully saved to the file system: `$backupFileSys`")
