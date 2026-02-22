@@ -3,9 +3,9 @@
 # SCRIPT INFORMATION
 #
 # Script:  Mikrotik RouterOS automatic backup & update
-# Version: 25.04.15
+# Version: 26.02.22
 # Created: 07/08/2018
-# Updated: 15/04/2025
+# Updated: 22/02/2026
 # Author:  Alexander Tebiev
 # Website: https://github.com/beeyev
 # You can contact me by e-mail at tebiev@mail.com
@@ -16,7 +16,7 @@
 # --- MODIFY THIS SECTION AS NEEDED ---
 # Notification e-mail
 # (Make sure you have configured Email settings in Tools -> Email)
-:local emailAddress "yourmail@example.com";
+:local emailAddress "yourmail@example.com"
 
 # Script mode, possible values: backup, osupdate, osnotify.
 # backup    -   Only backup will be performed. (default value, if none provided)
@@ -56,7 +56,7 @@
 
 #  !!! DO NOT EDIT BELOW THIS LINE UNLESS YOU KNOW WHAT YOU’RE DOING !!!
 
-:local scriptVersion "25.04.15"
+:local scriptVersion "26.02.22"
 
 # default and fallback public IP detection services
 :local ipAddressDetectServiceDefault "https://ipv4.mikrotik.ovh/"
@@ -112,26 +112,18 @@
   :local ver1 $1
   :local ver2 $2
 
-  # Extract the major and minor components from a version
-  :local extractMajorMinor do={
-    :local ver $1
-    :local dot1 [:find $ver "."]
-    :if ($dot1 = -1) do={ :return $ver }
+  # Extract "major.minor" prefix from each version by finding the second dot
+  :local dot1 [:find $ver1 "."]
+  :if ([:len $dot1] = 0) do={ :return ($ver1 = $ver2) }
+  :local end1 [:find $ver1 "." ($dot1 + 1)]
+  :if ([:len $end1] = 0) do={ :set end1 [:len $ver1] }
 
-    :local major [:pick $ver 0 $dot1]
-    :local rest [:pick $ver ($dot1 + 1) [:len $ver]]
-    :local dot2 [:find $rest "."]
-    :local minor $rest
-    :if ($dot2 >= 0) do={ :set minor [:pick $rest 0 $dot2] }
+  :local dot2 [:find $ver2 "."]
+  :if ([:len $dot2] = 0) do={ :return ($ver1 = $ver2) }
+  :local end2 [:find $ver2 "." ($dot2 + 1)]
+  :if ([:len $end2] = 0) do={ :set end2 [:len $ver2] }
 
-    :return ($major . "." . $minor)
-  }
-
-  # Compare the major and minor components of both version strings
-  :if ([$extractMajorMinor $ver1] = [$extractMajorMinor $ver2]) do={
-    :return true
-  }
-  :return false
+  :return ([:pick $ver1 0 $end1] = [:pick $ver2 0 $end2])
 }
 
 # Creates backups and returns array of names
@@ -315,11 +307,11 @@
   :set emailServer [/tool e-mail get address]
 }
 :if ($emailServer = "0.0.0.0") do={
-  :log error ("$SMP Email server address is not correct: `$emailServer`, check `Tools -> Email`. Script stopped.");
+  :log error ("$SMP Email server address is not correct: `$emailServer`, check `Tools -> Email`. Script stopped.")
   :error $exitErrorMessage
 }
 :if ([:len $emailFromAddress] < 3) do={
-  :log error ("$SMP Email configuration FROM address is not correct: `$emailFromAddress`, check `Tools -> Email`. Script stopped.");
+  :log error ("$SMP Email configuration FROM address is not correct: `$emailFromAddress`, check `Tools -> Email`. Script stopped.")
   :error $exitErrorMessage
 }
 
@@ -376,15 +368,15 @@
 :local deviceBoardName [/system resource get board-name]
 
 ## Check if it's a cloud hosted router
-:local isCloudHostedRouter false;
+:local isCloudHostedRouter false
 :if ([:pick $deviceBoardName 0 3] = "CHR" or [:pick $deviceBoardName 0 3] = "x86") do={
-  :set isCloudHostedRouter true;
-};
+  :set isCloudHostedRouter true
+}
 
-:local deviceIdentityName     [/system identity get name];
+:local deviceIdentityName     [/system identity get name]
 :local deviceIdentityNameShort  [:pick $deviceIdentityName 0 18]
 
-:local deviceRbModel        "CloudHostedRouter";
+:local deviceRbModel        "CloudHostedRouter"
 :local deviceRbSerialNumber "--"
 :local deviceRbCurrentFw    "--"
 :local deviceRbUpgradeFw    "--"
@@ -394,7 +386,7 @@
   :set deviceRbSerialNumber [/system routerboard get serial-number]
   :set deviceRbCurrentFw    [/system routerboard get current-firmware]
   :set deviceRbUpgradeFw    [/system routerboard get upgrade-firmware]
-};
+}
 
 :local runningOsChannel [$FuncGetRunningOsChannel]
 :local runningOsVersion [$FuncGetRunningOsVersion]
@@ -481,13 +473,13 @@
 
   # Checking for new version
   :if ($scriptMode = "osupdate" or $scriptMode = "osnotify") do={
-    log info ("$SMP Setting update channel to `$updateChannel`")
+    :log info ("$SMP Setting update channel to `$updateChannel`")
     /system package update set channel=$updateChannel
-    log info ("$SMP Checking for new RouterOS version. Current installed version is: `$runningOsVersion`")
+    :log info ("$SMP Checking for new RouterOS version. Current installed version is: `$runningOsVersion`")
     /system package update check-for-updates
 
     # Wait to allow the system to check for updates
-    :delay 5s;
+    :delay 5s
 
     :local packageUpdateStatus "undefined"
 
@@ -557,7 +549,7 @@
     }
 
     :do {
-      :set mailAttachments [$FuncCreateBackups $backupName $backupPassword $sensitiveDataInConfig];
+      :set mailAttachments [$FuncCreateBackups $backupName $backupPassword $sensitiveDataInConfig]
 
       :set mailPtSubjectBackup "Backup created"
       :set mailPtBodyBackup "System backups have been successfully created and attached to this email."
@@ -596,8 +588,8 @@
 
   :if ([:len $mailAttachments] > 0) do={
     :log info "$SMP Cleaning up backup files from the file system..."
-    /file remove $mailAttachments;
-    :delay 2s;
+    /file remove $mailAttachments
+    :delay 2s
   }
 
   :if ($isOsNeedsToBeUpdated = true) do={
@@ -640,12 +632,12 @@
   /system routerboard upgrade
   :delay 2s
 
-  :log info "$SMP routerboard upgrade process was completed, going to reboot in a moment!";
+  :log info "$SMP routerboard upgrade process was completed, going to reboot in a moment!"
 
   ## Set task to send final report on the next boot
   /system scheduler add name=BKPUPD-NEXT-BOOT-TASK on-event=":delay 5s; /system scheduler remove BKPUPD-NEXT-BOOT-TASK; :global buGlobalVarScriptStep 3; :global buGlobalVarTargetOsVersion \"$buGlobalVarTargetOsVersion\"; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0
 
-  /system reboot;
+  /system reboot
 }
 
 ## STEP 3: Final report (after second reboot, with delay).
@@ -670,7 +662,7 @@
     :set mailStep3Body ($mailStep3Body . "\nNew RouterOS version: v.$targetOsVersion, routerboard firmware: v.$deviceRbCurrentFw")
     :set mailStep3Body ($mailStep3Body . "\n$changelogUrl\nBackups of the upgraded system are in the attachment of this email.\n\n$mailBodyDeviceInfo\n\n$mailBodyCopyright")
 
-    :set mailAttachments [$FuncCreateBackups $backupNameAfterUpdate $backupPassword $sensitiveDataInConfig];
+    :set mailAttachments [$FuncCreateBackups $backupNameAfterUpdate $backupPassword $sensitiveDataInConfig]
   } else={
     :log error "$SMP Failed to verify new RouterOS version: target: `$targetOsVersion`, current: `$runningOsVersion`"
     :set mailStep3Subject ($mailStep3Subject . " - Update failed")
@@ -682,8 +674,8 @@
 
   :if ([:len $mailAttachments] > 0) do={
     :log info "$SMP Cleaning up backup files from the file system..."
-    /file remove $mailAttachments;
-    :delay 2s;
+    /file remove $mailAttachments
+    :delay 2s
   }
 
   :log info "$SMP Final report email sent successfully, and the script has finished."
