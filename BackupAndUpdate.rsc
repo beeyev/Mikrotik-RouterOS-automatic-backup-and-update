@@ -51,6 +51,24 @@
 # Include public IP info in email if set to true
 :local detectPublicIpAddress true
 
+# Backup transport methods (array)
+# Possible values: email, ftp
+# Examples: {"email"}  or  {"ftp"}  or  {"email";"ftp"}
+:local backupTransport {"email"}
+
+# FTP upload settings (only used if backupTransport includes "ftp")
+# Supports FTP and SFTP via URL scheme (ftp://, sftp://)
+# backupFtpUrl: Server only, no path. Example: "ftp://192.168.1.10" or "sftp://host.example.com"
+# backupFtpPath: Remote directory path. Example: "/backups/mikrotik/" (must start and end with /)
+#                Supports %identity% placeholder which will be replaced with device identity name
+#                Example: "/backups/%identity%/" -> "/backups/myrouter/"
+# backupFtpUser: The default user for "/tool fetch", is "anonymous", leaving this value empty here
+# 				 will use the default for "/tool fetch"
+:local backupFtpUrl ""
+:local backupFtpPath "/"
+:local backupFtpUser ""
+:local backupFtpPassword ""
+
 ## Allow anonymous statistics collection. (script mode and generic non-sensitive device info)
 :local anonStats true
 
@@ -132,8 +150,8 @@
 #  $2 - password (optional)
 #  $3 - sensitive data in config (optional, default: false)
 # Example:
-# :put [$FuncCreateBackups "daily-backup"]
-:local FuncCreateBackups do={
+# :put [$BkpUpdFuncCreateBackups "daily-backup"]
+:global BkpUpdFuncCreateBackups do={
   :local backupName $1
   :local backupPassword $2
   :local sensitiveDataInConfig $3
@@ -141,7 +159,7 @@
   #Script messages prefix
   :local SMP "Bkp&Upd:"
   :local exitErrorMessage "$SMP script stopped due to an error. Please check logs for more details."
-  :log info ("$SMP global function `FuncCreateBackups` started, input: `$backupName`")
+  :log info ("$SMP global function `BkpUpdFuncCreateBackups` started, input: `$backupName`")
 
   # validate required parameter: backupName
   :if ([:typeof $backupName] != "str" or [:len $backupName] = 0) do={
@@ -197,9 +215,70 @@
     :error $exitErrorMessage
   }
 
-  :log info ("$SMP global function `FuncCreateBackups` finished. Created backups, system: `$backupFileSys`, config: `$backupFileConfig`")
+  :log info ("$SMP global function `BkpUpdFuncCreateBackups` finished. Created backups, system: `$backupFileSys`, config: `$backupFileConfig`")
 
   :return $backupNames
+}
+
+# Uploads backup files to FTP/SFTP server
+# Parameters:
+#  $1 - server URL (e.g. "ftp://server" or "sftp://host")
+#  $2 - remote path (e.g. "/backups/mikrotik/")
+#  $3 - file attachments (array of filenames)
+#  $4 - username (optional)
+#  $5 - password (optional)
+#
+# Example:
+# $BkpUpdFuncUploadBackupsFtp "ftp://192.168.1.10" "/backups/" {"backup.backup";"backup.rsc"} "user" "pass"
+:global BkpUpdFuncUploadBackupsFtp do={
+
+  :local ftpUrl $1
+  :local ftpPath $2
+  :local fileList $3
+  :local ftpUser $4
+  :local ftpPassword $5
+
+  :local SMP "Bkp&Upd:"
+  :local exitErrorMessage "$SMP script stopped due to an error. Please check logs for more details."
+
+  :log info "$SMP Attempting to upload backups to `$ftpUrl$ftpPath`"
+
+  :if ([:len $ftpUrl] = 0) do={
+    :log error "$SMP FTP URL is not configured"
+    :error $exitErrorMessage
+  }
+
+  :if ([:len $fileList] = 0) do={
+    :log info "$SMP No files to upload"
+    :return true
+  }
+
+  :foreach fileName in=$fileList do={
+    :local remotePath "$ftpPath$fileName"
+    :log info "$SMP Uploading file `$fileName` to `$ftpUrl$remotePath`"
+
+    :do {
+      # Check if file exists
+      :if ([:len [/file find name=$fileName]] = 0) do={
+        :log error "$SMP File not found: $fileName"
+        :error "File not found"
+      }
+
+      :if ([:len $ftpUser] > 0 and [:len $ftpPassword] > 0) do={
+        /tool fetch url=$ftpUrl upload=yes src-path=$fileName dst-path=$remotePath user=$ftpUser password=$ftpPassword
+      } else={
+        /tool fetch url=$ftpUrl upload=yes src-path=$fileName dst-path=$remotePath
+      }
+      :delay 2s
+
+      :log info "$SMP File `$fileName` uploaded successfully"
+    } on-error={
+      :log error "$SMP Failed to upload file `$fileName` to `$ftpUrl$remotePath`"
+      :error $exitErrorMessage
+    }
+  }
+
+  :log info "$SMP All backup files uploaded successfully"
 }
 
 # Sends an email
@@ -210,8 +289,8 @@
 #  $4 - file attachments (optional; pass "" if not needed)
 #
 # Example:
-# $FuncSendEmailSafe "admin@domain.com" "Backup Done" "Backup complete." "backup1.backup"
-:local FuncSendEmailSafe do={
+# $BkpUpdFuncSendEmailSafe "admin@domain.com" "Backup Done" "Backup complete." "backup1.backup"
+:global BkpUpdFuncSendEmailSafe do={
 
   :local emailTo $1
   :local emailSubject $2
@@ -272,6 +351,57 @@
   }
 }
 
+# Sends backups via configured transport method(s)
+# Parameters:
+#  $1 - email address
+#  $2 - email subject
+#  $3 - email body
+#  $4 - file attachments (array)
+#  $5 - backup transport methods (array)
+#  $6 - FTP URL
+#  $7 - FTP path
+#  $8 - FTP user (optional)
+#  $9 - FTP password (optional)
+#
+# Example:
+# $BkpUpdFuncSendBackups $emailAddress $subject $body $files {"email";"ftp"} "ftp://server" "/backups/" "user" "pass"
+:global BkpUpdFuncSendBackups do={
+
+  # Declare functions that will be called (required for RouterOS scope rules)
+  :global BkpUpdFuncSendEmailSafe;
+  :global BkpUpdFuncUploadBackupsFtp;
+
+  :local emailTo $1
+  :local emailSubject $2
+  :local emailBody $3
+  :local fileAttachments $4
+  :local transportMethods $5
+  :local ftpUrl $6
+  :local ftpPath $7
+  :local ftpUser $8
+  :local ftpPassword $9
+
+  :local SMP "Bkp&Upd:"
+
+  # Check if transport methods contains "email"
+  :local useEmail false
+  :foreach method in=$transportMethods do={
+    :if ($method = "email") do={ :set useEmail true }
+  }
+  :if ($useEmail = true) do={
+    $BkpUpdFuncSendEmailSafe $emailTo $emailSubject $emailBody $fileAttachments
+  }
+
+  # Check if transport methods contains "ftp"
+  :local useFtp false
+  :foreach method in=$transportMethods do={
+    :if ($method = "ftp") do={ :set useFtp true }
+  }
+  :if ($useFtp = true) do={
+    $BkpUpdFuncUploadBackupsFtp $ftpUrl $ftpPath $fileAttachments $ftpUser $ftpPassword
+  }
+}
+
 # Global variable to track current update step
 # They need to be initialized here first to be available in the script
 :global buGlobalVarTargetOsVersion
@@ -289,30 +419,89 @@
 # Initial validation
 #
 
-## Check email settings
-:if ([:len $emailAddress] < 3) do={
-  :log error ("$SMP Parameter `\$emailAddress` is not set, or contains invalid value. Script stopped.")
+# Backup transport validation
+:local validTransports {"email";"ftp"}
+
+:if ([:typeof $backupTransport] != "array") do={
+  :log error ("$SMP Script parameter `\$backupTransport` must be an array. Example: {\"email\"} or {\"email\";\"ftp\"}. Script stopped.")
   :error $exitErrorMessage
 }
 
-# Values will be defined later in the script
-:local emailServer ""
-:local emailFromAddress [/tool e-mail get from]
+:if ([:len $backupTransport] = 0) do={
+  :log error ("$SMP Script parameter `\$backupTransport` is empty. Possible values: email, ftp. Script stopped.")
+  :error $exitErrorMessage
+}
 
-:log info "$SMP Validating email settings..."
-:do {
-  :set emailServer [/tool e-mail get server]
-} on-error={
-  # This is a workaround for the RouterOS v7.12 and older versions
-  :set emailServer [/tool e-mail get address]
+:foreach transport in=$backupTransport do={
+  :local isValid false
+  :foreach validTransport in=$validTransports do={
+    :if ($transport = $validTransport) do={
+      :set isValid true
+    }
+  }
+  :if ($isValid = false) do={
+    :log error ("$SMP Script parameter `\$backupTransport` contains invalid value: `$transport`. Possible values: email, ftp. Script stopped.")
+    :error $exitErrorMessage
+  }
 }
-:if ($emailServer = "0.0.0.0") do={
-  :log error ("$SMP Email server address is not correct: `$emailServer`, check `Tools -> Email`. Script stopped.")
-  :error $exitErrorMessage
+
+:log info "$SMP Backup transport method(s): $backupTransport"
+
+# Check email settings (only if using email transport)
+# Note: Email configuration is also checked if emailAddress is set, even when not in backupTransport,
+# so that error notifications can be sent via email when using FTP-only for backups
+:local useEmail false
+:foreach method in=$backupTransport do={
+  :if ($method = "email") do={ :set useEmail true }
 }
-:if ([:len $emailFromAddress] < 3) do={
-  :log error ("$SMP Email configuration FROM address is not correct: `$emailFromAddress`, check `Tools -> Email`. Script stopped.")
-  :error $exitErrorMessage
+
+:local emailConfigured false
+:if ([:len $emailAddress] >= 3) do={
+  :set emailConfigured true
+}
+
+:if ($useEmail = true or $emailConfigured = true) do={
+  :if ([:len $emailAddress] < 3) do={
+    :log error ("$SMP Parameter `\$emailAddress` is not set, or contains invalid value. Script stopped.")
+    :error $exitErrorMessage
+  }
+
+  # Values will be defined later in the script
+  :local emailServer ""
+  :local emailFromAddress [/tool e-mail get from]
+
+  :log info "$SMP Validating email settings..."
+  :do {
+    :set emailServer [/tool e-mail get server]
+  } on-error={
+    # This is a workaround for the RouterOS v7.12 and older versions
+    :set emailServer [/tool e-mail get address]
+  }
+  :if ($emailServer = "0.0.0.0") do={
+    :log error ("$SMP Email server address is not correct: `$emailServer`, check `Tools -> Email`. Script stopped.")
+    :error $exitErrorMessage
+  }
+  :if ([:len $emailFromAddress] < 3) do={
+    :log error ("$SMP Email configuration FROM address is not correct: `$emailFromAddress`, check `Tools -> Email`. Script stopped.")
+    :error $exitErrorMessage
+  }
+}
+
+# Check FTP settings (only if using FTP transport)
+:local useFtp false
+:foreach method in=$backupTransport do={
+  :if ($method = "ftp") do={ :set useFtp true }
+}
+:if ($useFtp = true) do={
+  :if ([:len $backupFtpUrl] < 6) do={
+    :log error ("$SMP Parameter `\$backupFtpUrl` is not set, or contains invalid value. Script stopped.")
+    :error $exitErrorMessage
+  }
+  :if ([:len $backupFtpPath] = 0) do={
+    :log error ("$SMP Parameter `\$backupFtpPath` is not set. Script stopped.")
+    :error $exitErrorMessage
+  }
+  :log info "$SMP FTP upload configured: `$backupFtpUrl$backupFtpPath`"
 }
 
 # Script mode validation
@@ -376,6 +565,24 @@
 :local deviceIdentityName     [/system identity get name]
 :local deviceIdentityNameShort  [:pick $deviceIdentityName 0 18]
 
+# Expand FTP path template if using FTP transport
+:local useFtp false
+:foreach method in=$backupTransport do={
+  :if ($method = "ftp") do={ :set useFtp true }
+}
+:if ($useFtp = true) do={
+  # Replace %identity% placeholder with actual device identity
+  :local expandedFtpPath $backupFtpPath
+  :local identityPos [:find $expandedFtpPath "%identity%"]
+  :if ([:typeof $identityPos] != "nil") do={
+    :local beforeIdentity [:pick $expandedFtpPath 0 $identityPos]
+    :local afterIdentity [:pick $expandedFtpPath ($identityPos + 10)]
+    :set expandedFtpPath "$beforeIdentity$deviceIdentityName$afterIdentity"
+  }
+  :set backupFtpPath $expandedFtpPath
+  :log info "$SMP FTP path expanded to: `$backupFtpPath`"
+}
+
 :local deviceRbModel        "CloudHostedRouter"
 :local deviceRbSerialNumber "--"
 :local deviceRbCurrentFw    "--"
@@ -393,8 +600,8 @@
 :local deviceOsVerAndChannelRunning [/system resource get version]
 
 :local backupNameTemplate     "backup_v$runningOsVersion_$runningOsChannel_$currentDateTime"
-:local backupNameBeforeUpdate "backup_before_update_$backupNameTemplate"
-:local backupNameAfterUpdate  "backup_after_update_$backupNameTemplate"
+:local backupNameBeforeUpdate "backup_before_update_v$runningOsVersion_$runningOsChannel_$currentDateTime"
+:local backupNameAfterUpdate  "backup_after_update_v$runningOsVersion_$runningOsChannel_$currentDateTime"
 
 ## Email body template
 
@@ -532,7 +739,11 @@
   :if ($forceBackup = true or $scriptMode = "backup" or $isOsNeedsToBeUpdated = true) do={
     :log info ("$SMP Starting backup process.")
 
-    :set isEmailNeedsToBeSent true
+    # Only set isEmailNeedsToBeSent if there's an actual notification (not routine backup)
+    # Routine backups in backup mode with FTP transport shouldn't trigger emails
+    :if ($isOsNeedsToBeUpdated = true) do={
+      :set isEmailNeedsToBeSent true
+    }
 
     :local backupName $backupNameTemplate
 
@@ -549,10 +760,18 @@
     }
 
     :do {
-      :set mailAttachments [$FuncCreateBackups $backupName $backupPassword $sensitiveDataInConfig]
+      :set mailAttachments [$BkpUpdFuncCreateBackups $backupName $backupPassword $sensitiveDataInConfig]
 
       :set mailPtSubjectBackup "Backup created"
-      :set mailPtBodyBackup "System backups have been successfully created and attached to this email."
+      :set mailPtBodyBackup "System backups have been successfully created."
+      :foreach method in=$backupTransport do={
+        :if ($method = "email") do={
+          :set mailPtBodyBackup ($mailPtBodyBackup . " Backups are attached to this email.")
+        }
+        :if ($method = "ftp") do={
+          :set mailPtBodyBackup ($mailPtBodyBackup . " Backups uploaded via FTP.")
+        }
+      }
     } on-error={
       #failed to create backup
       :set isOsNeedsToBeUpdated false
@@ -564,8 +783,8 @@
     }
   }
 
-  :if ($isEmailNeedsToBeSent = true) do={
-    :log info "$SMP Preparing to send email..."
+  :if ($isEmailNeedsToBeSent = true or [:len $mailAttachments] > 0) do={
+    :log info "$SMP Preparing to send backups via configured transport..."
 
     :local mailStep1Subject $mailSubjectPrefix
     :local mailStep1Body  ""
@@ -579,10 +798,47 @@
 
     :set mailStep1Body ($mailStep1Body . $mailBodyDeviceInfo . "\n\n" . $mailBodyCopyright)
 
-    # Send email with backups
-    :do {$FuncSendEmailSafe $emailAddress $mailStep1Subject $mailStep1Body $mailAttachments} on-error={
+    # Send backups via configured transport
+    # Email notifications are sent when:
+    # 1. There's an important message (update available, error, etc.) - isEmailNeedsToBeSent = true
+    # 2. Email is in the transport array (routine backups with email transport)
+    :do {
+      :local shouldSendEmail false
+      :local emailAttachments ""
+
+      # Check if email transport is configured
+      :local useEmail false
+      :foreach method in=$backupTransport do={
+        :if ($method = "email") do={ :set useEmail true }
+      }
+
+      # Send email if: using email transport OR there's an important notification
+      :if ($useEmail = true) do={
+        :set shouldSendEmail true
+        :set emailAttachments $mailAttachments
+      } else={
+        # FTP-only: send email only for important notifications (not routine backups)
+        :if ($isEmailNeedsToBeSent = true and [:len $emailAddress] >= 3) do={
+          :set shouldSendEmail true
+          :set emailAttachments ""
+        }
+      }
+
+      :if ($shouldSendEmail = true) do={
+        $BkpUpdFuncSendEmailSafe $emailAddress $mailStep1Subject $mailStep1Body $emailAttachments
+      }
+
+      # If using FTP transport, upload backups
+      :local useFtp false
+      :foreach method in=$backupTransport do={
+        :if ($method = "ftp") do={ :set useFtp true }
+      }
+      :if ($useFtp = true and [:len $mailAttachments] > 0) do={
+        $BkpUpdFuncUploadBackupsFtp $backupFtpUrl $backupFtpPath $mailAttachments $backupFtpUser $backupFtpPassword
+      }
+    } on-error={
       :set isOsNeedsToBeUpdated false
-      :log error "$SMP The script will not proceed with the update process, because the email was not sent."
+      :log error "$SMP The script will not proceed with the update process, because backup transmission failed."
     }
   }
 
@@ -614,8 +870,12 @@
       :local mailUpdateErrorSubject ($mailSubjectPrefix . " - Update failed")
       :local mailUpdateErrorBody "The script was unable to install new RouterOS version. Please check device logs for more details."
 
-      # Send email with error
-      $FuncSendEmailSafe $emailAddress $mailUpdateErrorSubject $mailUpdateErrorBody ""
+      # Send notification with error (always try email if configured, even if using FTP for backups)
+      :if ([:len $emailAddress] >= 3) do={
+        $BkpUpdFuncSendEmailSafe $emailAddress $mailUpdateErrorSubject $mailUpdateErrorBody ""
+      } else={
+        :log warning "$SMP Update failed notification not sent (email not configured)"
+      }
 
       :error $exitErrorMessage
     }
@@ -660,9 +920,18 @@
     :set mailStep3Subject ($mailStep3Subject . " - Update completed - Backup created")
     :set mailStep3Body ($mailStep3Body . "RouterOS and routerboard upgrade process was completed")
     :set mailStep3Body ($mailStep3Body . "\nNew RouterOS version: v.$targetOsVersion, routerboard firmware: v.$deviceRbCurrentFw")
-    :set mailStep3Body ($mailStep3Body . "\n$changelogUrl\nBackups of the upgraded system are in the attachment of this email.\n\n$mailBodyDeviceInfo\n\n$mailBodyCopyright")
 
-    :set mailAttachments [$FuncCreateBackups $backupNameAfterUpdate $backupPassword $sensitiveDataInConfig]
+    :local useEmail false
+    :foreach method in=$backupTransport do={
+      :if ($method = "email") do={ :set useEmail true }
+    }
+    :if ($useEmail = true) do={
+      :set mailStep3Body ($mailStep3Body . "\n$changelogUrl\nBackups of the upgraded system are in the attachment of this email.\n\n$mailBodyDeviceInfo\n\n$mailBodyCopyright")
+    } else={
+      :set mailStep3Body ($mailStep3Body . "\n$changelogUrl\nBackups of the upgraded system have been uploaded.\n\n$mailBodyDeviceInfo\n\n$mailBodyCopyright")
+    }
+
+    :set mailAttachments [$BkpUpdFuncCreateBackups $backupNameAfterUpdate $backupPassword $sensitiveDataInConfig]
   } else={
     :log error "$SMP Failed to verify new RouterOS version: target: `$targetOsVersion`, current: `$runningOsVersion`"
     :set mailStep3Subject ($mailStep3Subject . " - Update failed")
@@ -670,7 +939,8 @@
     :set mailStep3Body ($mailStep3Body . "The script was unable to verify that the new RouterOS version was installed, target version: `$targetOsVersion`, current version: `$runningOsVersion`\nCheck device logs for more details.\n\n$mailBodyDeviceInfo\n\n$mailBodyCopyright")
   }
 
-  $FuncSendEmailSafe $emailAddress $mailStep3Subject $mailStep3Body $mailAttachments
+  # Send backups via configured transport
+  $BkpUpdFuncSendBackups $emailAddress $mailStep3Subject $mailStep3Body $mailAttachments $backupTransport $backupFtpUrl $backupFtpPath $backupFtpUser $backupFtpPassword
 
   :if ([:len $mailAttachments] > 0) do={
     :log info "$SMP Cleaning up backup files from the file system..."
@@ -678,7 +948,13 @@
     :delay 2s
   }
 
-  :log info "$SMP Final report email sent successfully, and the script has finished."
+  :log info "$SMP Final report sent successfully, and the script has finished."
 }
+
+# Clean up global functions from environment
+:do {/system script environment remove BkpUpdFuncCreateBackups} on-error={}
+:do {/system script environment remove BkpUpdFuncSendBackups} on-error={}
+:do {/system script environment remove BkpUpdFuncSendEmailSafe} on-error={}
+:do {/system script environment remove BkpUpdFuncUploadBackupsFtp} on-error={}
 
 :log info "$SMP the script has finished, script step: `$scriptStep` \n\n"
