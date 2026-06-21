@@ -42,7 +42,7 @@ Configure your email server parameters. If you don't have one, i recommend using
 ![](https://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update/raw/master/howto/email-config.png)  
 
 To check email settings, send a test message by running the following command in terminal:
-```
+```bash
 /tool e-mail send to="yourMail@example.com" subject="backup & update test!" body="It works!";
 ```
 
@@ -55,7 +55,7 @@ On Event: `/system script run BackupAndUpdate;`
 ![](https://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update/raw/master/howto/scheduler-task.png)  
   
 Or you can use this command to create the task:
-```
+```bash
 /system scheduler add name="Firmware Updater" on-event="/system script run BackupAndUpdate;" start-time=03:10:00 interval=1d comment="" disabled=no
 ```
 ##### 5. Test the script
