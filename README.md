@@ -14,9 +14,9 @@ This script allows you to generate daily backups of MikroTik and send them to an
 - Routerboard firmware can be upgraded automatically based on the installed RouterOS version.
 
 ## Script operating modes:
-**Backups only** - The script generates system and configuration backups and forwards them to a specified email as attachments. It uses your email account as a storage for these backups.  
-**Backups and notifications about new RouterOS release** -  In addition to creating backups, the script also monitors for any new releases of RouterOS firmware and communicates this information via email.  
-**Backups and automatic RouterOS upgrade** - The script begins by creating a backup, followed by a check for any new versions of RouterOS. If a newer firmware version is detected, the script initiates the upgrade process. Upon completion, two emails are sent: the first includes the system backups from the prior RouterOS version, and the second, sent post-upgrade, contains backups of the updated system.
+- **Backups only** - The script generates system and configuration backups and forwards them to a specified email as attachments. It uses your email account as a storage for these backups.  
+- **Backups and notifications about new RouterOS release** -  In addition to creating backups, the script also monitors for any new releases of RouterOS firmware and communicates this information via email.  
+- **Backups and automatic RouterOS upgrade** - The script begins by creating a backup, followed by a check for any new versions of RouterOS. If a newer firmware version is detected, the script initiates the upgrade process. Upon completion, two emails are sent: the first includes the system backups from the prior RouterOS version, and the second, sent post-upgrade, contains backups of the updated system.
 
 ## How to use
 > ❗️ **Important**  
@@ -24,18 +24,20 @@ This script allows you to generate daily backups of MikroTik and send them to an
 
 ##### 1. Configure parameters
 Take the  [script](https://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update/raw/master/BackupAndUpdate.rsc) and configure it's parameters at the beginning of the file.  
-This step is straightforward as all parameters are well-commented.
+This step is straightforward as all parameters are well-commented.  
 **Important!** Don't forget to provide correct email address for backups and pay attention to `scriptMode` variable.
 
 ##### 2. Create new script
-System -> Scripts [Add]  
+> In this example we use [WinBox](https://mikrotik.com/download/winbox)  
+
+Go to: `System` -> `Scripts` and click  the `[New]` button. 
 
 **Important!** Script name must be `BackupAndUpdate`   
 Insert the script which you configured earlier into the source area.  
 ![](https://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update/raw/master/howto/script-name.png)  
 
 ##### 3. Configure mail server
-Tools -> Email  
+Go to: `Tools` -> `Email` and click  the `[New]` button.  
 Configure your email server parameters. If you don't have one, i recommend using the [smtp2go.com](https://smtp2go.com "smtp2go.com") service, which allows sending a thousand emails per month for free.  
 ![](https://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update/raw/master/howto/email-config.png)  
 
@@ -45,7 +47,7 @@ To check email settings, send a test message by running the following command in
 ```
 
 ##### 4. Create scheduled task
-System -> Scheduler [Add]  
+Go to: `System` -> `Scheduler` and click the `[Add]` button.  
 Name: `Backup And Update`  
 Start Time: `03:10:00` (the start time has to be different for all your mikrotik devices in a chain)  
 Interval: `1d 00:00:00`  
@@ -60,11 +62,6 @@ Or you can use this command to create the task:
 Once everything is set up, it's important to verify that the script is functioning properly. 
 To do this, open a New Terminal and a Log window in your WinBox, then manually execute the script by typing `/system script run BackupAndUpdate;` in the Terminal.
 You will see the script the script's operation in the log window. If the script completes without any errors, check your email. You'll find a new message with backups from your MikroTik awaiting you. 🎉
-
-
-
-
-
 
 ## Acknowledgements
 I would like to extend my sincere gratitude to the following individuals who have contributed to this project:
