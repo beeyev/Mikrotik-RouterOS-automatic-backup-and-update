@@ -1,0 +1,60 @@
+services:
+
+  mailpit:
+    container_name: '${COMPOSE_PROJECT_NAME}-mailpit'
+    image: axllent/mailpit:latest
+    tty: true
+    restart: unless-stopped
+    environment:
+      - 'TZ=${TZ:-UTC}'
+      - 'MP_SMTP_AUTH_ACCEPT_ANY=1'
+      - 'MP_SMTP_AUTH_ALLOW_INSECURE=1'
+      - 'MP_ALLOW_UNTRUSTED_TLS=1'
+    ports:
+      - '8025:8025' # Web UI
+    networks:
+      - network1
+
+  routeros:
+    # https://github.com/EvilFreelancer/docker-routeros
+    # https://hub.docker.com/r/evilfreelancer/docker-routeros/
+    container_name: '${COMPOSE_PROJECT_NAME}-routeros'
+    image: evilfreelancer/docker-routeros:7.21.4
+    restart: unless-stopped
+    tty: true
+    depends_on:
+      mailpit:
+        condition: service_healthy
+    #entrypoint: ["/routeros/entrypoint_with_four_interfaces.sh"]
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+      - /dev/kvm
+    ports:
+      - "12280:80"
+      - "12222:22"
+      - "12223:23"
+      - "18728:8728"
+      - "18729:8729"
+      - "18291:8291"
+    networks:
+      default:
+        interface_name: eth0
+      network1:
+        interface_name: eth1
+
+  routeros-init:
+    build:
+      context: ./docker/routeros-init
+    restart: "no"
+    depends_on:
+      routeros:
+        condition: service_started
+    networks:
+      - default
+
+
+networks:
+  network1:
+    driver: bridge
