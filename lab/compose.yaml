@@ -13,7 +13,7 @@ services:
     ports:
       - '8025:8025' # Web UI
     networks:
-      - network1
+      - default
 
   routeros:
     # https://github.com/EvilFreelancer/docker-routeros
@@ -25,7 +25,6 @@ services:
     depends_on:
       mailpit:
         condition: service_healthy
-    #entrypoint: ["/routeros/entrypoint_with_four_interfaces.sh"]
     cap_add:
       - NET_ADMIN
     devices:
@@ -38,10 +37,11 @@ services:
       - "18728:8728"
       - "18729:8729"
       - "18291:8291"
+    # The image keeps eth0 for QEMU host forwarding and bridges eth1 into CHR.
     networks:
       default:
         interface_name: eth0
-      network1:
+      routeros-lan:
         interface_name: eth1
 
   routeros-init:
@@ -56,5 +56,5 @@ services:
 
 
 networks:
-  network1:
+  routeros-lan:
     driver: bridge
