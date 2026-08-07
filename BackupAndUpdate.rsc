@@ -603,10 +603,7 @@
 
       :local scheduledCommand (":delay 5s; /system scheduler remove BKPUPD-NEXT-BOOT-TASK; :global buGlobalVarScriptStep $nextStep; :global buGlobalVarTargetOsVersion \"$routerOsVersionAvailable\"; :delay 10s; /system script run BackupAndUpdate;")
 
-      # Drop a leftover task from an interrupted update cycle. Without this the
-      # add below fails with `already have such name`, which aborts this block
-      # before `/system package update install` is reached and is then reported
-      # as "Failed to install new RouterOS version".
+      # Drop a leftover task from an interrupted update cycle, otherwise the add below fails
       :do {/system scheduler remove BKPUPD-NEXT-BOOT-TASK} on-error={}
 
       /system scheduler add name=BKPUPD-NEXT-BOOT-TASK on-event=$scheduledCommand start-time=startup interval=0
@@ -642,10 +639,7 @@
   :log info "$SMP routerboard upgrade process was completed, going to reboot in a moment!"
 
   ## Set task to send final report on the next boot
-  # Drop a leftover task from an interrupted update cycle (see step 1). This add
-  # is not wrapped in `:do`, so a name collision here kills the script before
-  # `/system reboot` and leaves the device on the new RouterOS with the old
-  # routerboard firmware and no final report.
+  # Drop a leftover task from an interrupted update cycle, otherwise the add below fails and the device never reboots
   :do {/system scheduler remove BKPUPD-NEXT-BOOT-TASK} on-error={}
 
   /system scheduler add name=BKPUPD-NEXT-BOOT-TASK on-event=":delay 5s; /system scheduler remove BKPUPD-NEXT-BOOT-TASK; :global buGlobalVarScriptStep 3; :global buGlobalVarTargetOsVersion \"$buGlobalVarTargetOsVersion\"; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0
