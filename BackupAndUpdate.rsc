@@ -602,6 +602,10 @@
       }
 
       :local scheduledCommand (":delay 5s; /system scheduler remove BKPUPD-NEXT-BOOT-TASK; :global buGlobalVarScriptStep $nextStep; :global buGlobalVarTargetOsVersion \"$routerOsVersionAvailable\"; :delay 10s; /system script run BackupAndUpdate;")
+
+      # Drop a leftover task from an interrupted update cycle, otherwise the add below fails
+      :do {/system scheduler remove BKPUPD-NEXT-BOOT-TASK} on-error={}
+
       /system scheduler add name=BKPUPD-NEXT-BOOT-TASK on-event=$scheduledCommand start-time=startup interval=0
 
       /system package update install
@@ -635,6 +639,9 @@
   :log info "$SMP routerboard upgrade process was completed, going to reboot in a moment!"
 
   ## Set task to send final report on the next boot
+  # Drop a leftover task from an interrupted update cycle, otherwise the add below fails and the device never reboots
+  :do {/system scheduler remove BKPUPD-NEXT-BOOT-TASK} on-error={}
+
   /system scheduler add name=BKPUPD-NEXT-BOOT-TASK on-event=":delay 5s; /system scheduler remove BKPUPD-NEXT-BOOT-TASK; :global buGlobalVarScriptStep 3; :global buGlobalVarTargetOsVersion \"$buGlobalVarTargetOsVersion\"; :delay 10s; /system script run BackupAndUpdate;" start-time=startup interval=0
 
   /system reboot
