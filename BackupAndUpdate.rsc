@@ -478,10 +478,21 @@
     :log info ("$SMP Checking for new RouterOS version. Current installed version is: `$runningOsVersion`")
     /system package update check-for-updates
 
-    # Wait to allow the system to check for updates
-    :delay 5s
-
+    # `check-for-updates` is asynchronous, so a fixed delay races it.
+    # Wait for a terminal status instead, with a timeout as the fallback.
     :local packageUpdateStatus "undefined"
+    :local checkTimeout 60
+    :local checkCounter 0
+    :delay 2s
+    :while ($checkCounter < $checkTimeout) do={
+      :set packageUpdateStatus [/system package update get status]
+      :if ($packageUpdateStatus = "New version is available" or $packageUpdateStatus = "System is already up to date") do={
+        :set checkCounter $checkTimeout
+      } else={
+        :delay 1s
+        :set checkCounter ($checkCounter + 1)
+      }
+    }
 
     :set routerOsVersionAvailable [/system package update get latest-version]
     :set packageUpdateStatus [/system package update get status]
