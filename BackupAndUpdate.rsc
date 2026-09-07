@@ -165,23 +165,45 @@
   :log info ("$SMP system backup created: `$backupFileSys`")
 
     ## Export config file
+  # RouterOS parses the whole script before running it, so a version specific command has to
+  # stay inside a string and be run with `:execute`. Otherwise the branch the running version
+  # does not support breaks parsing and nothing runs at all.
+  :local osMajor 7
+  :local osVersionRaw [/system resource get version]
+  :local osVersionDotPos [:find $osVersionRaw "."]
+  :if ([:len $osVersionDotPos] > 0) do={
+    :set osMajor [:tonum [:pick $osVersionRaw 0 $osVersionDotPos]]
+  }
+
   :if ($sensitiveDataInConfig = true) do={
     :log info ("$SMP starting export config with sensitive data, backup name: `$backupName`")
     # Since RouterOS v7 it needs to be explicitly set that we want to export sensitive data
-    :if ([:pick [/system resource get version] 0 1] < 7) do={
+    :if ($osMajor < 7) do={
       :execute "/export compact terse file=$backupName"
     } else={
       :execute "/export compact show-sensitive terse file=$backupName"
     }
   } else={
     :log info ("$SMP starting export config without sensitive data, backup name: `$backupName`")
-    /export compact hide-sensitive terse file=$backupName
+    :if ($osMajor < 7) do={
+      :execute "/export compact hide-sensitive terse file=$backupName"
+    } else={
+      # Since RouterOS v7 sensitive data is hidden by default
+      :execute "/export compact terse file=$backupName"
+    }
   }
 
   :log info ("$SMP Config export complete: `$backupFileConfig`")
-  :log info ("$SMP Waiting a little to ensure backup files are written")
+  :log info ("$SMP Waiting for the backup files to be written")
 
-  :delay 40s
+  # Both export branches run asynchronously via `:execute`, so wait for the files to appear
+  # instead of relying on a fixed delay.
+  :local waitBackupTimeout 120
+  :local waitBackupCounter 0
+  :while ($waitBackupCounter < $waitBackupTimeout and ([:len [/file find name=$backupFileSys]] = 0 or [:len [/file find name=$backupFileConfig]] = 0)) do={
+    :delay 1s
+    :set waitBackupCounter ($waitBackupCounter + 1)
+  }
 
   :if ([:len [/file find name=$backupFileSys]] > 0) do={
     :log info ("$SMP system backup file successfully saved to the file system: `$backupFileSys`")
