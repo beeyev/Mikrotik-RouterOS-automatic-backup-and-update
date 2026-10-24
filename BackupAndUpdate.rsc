@@ -484,6 +484,13 @@
   :if ($scriptMode = "osupdate" or $scriptMode = "osnotify") do={
     :log info ("$SMP Setting update channel to `$updateChannel`")
     /system package update set channel=$updateChannel
+
+    # Clear what an interrupted download left behind. With a partial `.npk` in `downloads/`,
+    # `/system package update install` returns without rebooting and without raising an error.
+    :if ($scriptMode = "osupdate") do={
+      :do {/system package update cancel} on-error={}
+      :do {/file remove [/file find where name~"^downloads/.*\\.npk\$"]} on-error={}
+    }
     :log info ("$SMP Checking for new RouterOS version. Current installed version is: `$runningOsVersion`")
     /system package update check-for-updates
 
@@ -629,6 +636,12 @@
       /system scheduler add name=BKPUPD-NEXT-BOOT-TASK on-event=$scheduledCommand start-time=startup interval=0
 
       /system package update install
+
+      # A successful `install` reboots the device and this script dies with it.
+      # Still being here after a generous wait means the update did not take.
+      :delay 120s
+      :log error ("$SMP `/system package update install` returned without rebooting the device, update status: `" . [/system package update get status] . "`")
+      :error "install returned without rebooting"
     } on-error={
       # Failed to install new os version, remove the task
       :do {/system scheduler remove BKPUPD-NEXT-BOOT-TASK} on-error={}
