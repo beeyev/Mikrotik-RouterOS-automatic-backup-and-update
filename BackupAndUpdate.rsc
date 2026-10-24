@@ -76,13 +76,17 @@
 :local FuncGetRunningOsVersion do={
   :local runningOsAndChannel [/system resource get version]
 
+  # RouterOS 7.25+ reports the bare version ("7.25"), older versions append the channel ("7.24.5 (stable)")
   :local spacePos [:find $runningOsAndChannel " "]
   :if ([:len $spacePos] = 0) do={
-    :log error "Bkp&Upd: Could not extract installed OS version string: `$runningOsAndChannel`."
-    :error "Bkp&Upd: error, check logs"
+    :set spacePos [:len $runningOsAndChannel]
   }
 
   :local versionOnly [:pick $runningOsAndChannel 0 $spacePos]
+  :if ([:len $versionOnly] = 0) do={
+    :log error "Bkp&Upd: Could not extract installed OS version string: `$runningOsAndChannel`."
+    :error "Bkp&Upd: error, check logs"
+  }
 
   :return $versionOnly
 }
@@ -92,10 +96,15 @@
 :local FuncGetRunningOsChannel do={
   :local runningOsAndChannel [/system resource get version]
 
+  # RouterOS 7.25+ no longer appends the channel to the version, fall back to the configured update channel
   :local open [:find $runningOsAndChannel "("]
   :if ([:len $open] = 0) do={
-    :log error "Bkp&Upd: Could not extract installed OS channel from version string: `$runningOsAndChannel`."
-    :error "Bkp&Upd: error, check logs"
+    :local configuredChannel [/system package update get channel]
+    :if ([:len $configuredChannel] = 0) do={
+      :log error "Bkp&Upd: Could not extract installed OS channel from version string: `$runningOsAndChannel`."
+      :error "Bkp&Upd: error, check logs"
+    }
+    :return $configuredChannel
   }
 
   :local rest [:pick $runningOsAndChannel ($open+1) [:len $runningOsAndChannel]]
