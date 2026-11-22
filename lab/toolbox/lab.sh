@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Lab toolbox. `lab init` sets the RouterOS admin password and points
-# /tool e-mail at Mailpit, then exits. `lab ros` runs RouterOS commands over SSH.
+# Lab toolbox. `lab init` configures a fresh RouterOS for the lab, then exits.
+# `lab ros` runs RouterOS commands over SSH.
 
 set -Eeuo pipefail
 shopt -s inherit_errexit
@@ -42,14 +42,21 @@ wait_router() {
   done
 }
 
-configure_router() {
+# Usage: apply PATH JSON
+apply() {
   local out
-  if ! out="$(rest "${ROS_PASSWORD}" tool/e-mail/set \
-    --data '{"server":"mailpit","port":"1025","from":"routeros@lab.test","tls":"no"}')"; then
-    log "error: RouterOS rejected the e-mail settings: ${out}"
+  if ! out="$(rest "${ROS_PASSWORD}" "$1" --data "$2")"; then
+    log "error: RouterOS rejected $1: ${out}"
     exit 1
   fi
+}
+
+configure_router() {
+  apply tool/e-mail/set '{"server":"mailpit","port":"1025","from":"routeros@lab.test","tls":"no"}'
   log "e-mail goes to mailpit:1025"
+  # Keeps the log across reboots, such as the one in an OS update cycle.
+  apply system/logging/action/set '{"numbers":"memory","target":"disk"}'
+  log "log is kept on disk"
 }
 
 # The first interactive login asks "Do you want to see the software license?".

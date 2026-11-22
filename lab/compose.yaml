@@ -6,7 +6,6 @@ services:
   mailpit:
     image: axllent/mailpit:latest
     environment:
-      # Accept whatever SMTP auth a test config uses, over plain text.
       MP_SMTP_AUTH_ACCEPT_ANY: "1"
       MP_SMTP_AUTH_ALLOW_INSECURE: "1"
     ports:
@@ -27,7 +26,7 @@ services:
       - "127.0.0.1:12280:80"     # WebFig and REST API
       - "127.0.0.1:18291:8291"
 
-  # One-shot: sets the admin password and e-mail settings, then exits.
+  # One-shot: configures RouterOS (see toolbox/lab.sh), then exits.
   toolbox:
     build: ./toolbox
     container_name: bkpupd-lab-toolbox
