@@ -23,6 +23,7 @@ down: ## Stop the lab and discard all state
 	docker compose down --remove-orphans
 
 ssh: ## Open a RouterOS terminal
+	@echo "Type /quit or press Ctrl+D to leave the RouterOS terminal."
 	@docker compose --progress quiet run --rm --no-deps toolbox lab ros
 
 ros: ## Run a RouterOS command: make ros CMD='/system resource print'
