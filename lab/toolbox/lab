@@ -52,6 +52,24 @@ configure_router() {
   log "e-mail goes to mailpit:1025"
 }
 
+# The first interactive login asks "Do you want to see the software license?".
+# RouterOS remembers the answer, so give it here and `make ssh` goes straight
+# to the prompt.
+answer_license_prompt() {
+  expect -c '
+    set timeout 30
+    log_user 0
+    spawn lab ros
+    expect {
+      -ex "Y/n" { send "n"; exp_continue }
+      -ex "admin@" { send "/quit\r" }
+      timeout { exit 1 }
+    }
+    expect eof
+  '
+  log "license prompt answered"
+}
+
 # Runs a RouterOS command, or opens a session without arguments.
 ros() {
   export SSHPASS="${ROS_PASSWORD}"
@@ -64,6 +82,7 @@ case "${1:-}" in
     log "waiting for RouterOS"
     wait_router
     configure_router
+    answer_license_prompt
     ;;
   ros)
     shift

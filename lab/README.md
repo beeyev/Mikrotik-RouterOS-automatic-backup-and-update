@@ -24,6 +24,8 @@ The lab keeps no state. Run `make down up` to get a fresh, configured RouterOS.
 
 RouterOS user `admin`, password `admin`.
 
+`make ssh` opens a RouterOS terminal. Type `/quit` or press Ctrl+D to leave it.
+
 Run a RouterOS command without an SSH client:
 
 ```sh

@@ -10,8 +10,14 @@ help: ## Show this help
 
 up: ## Start the lab and wait until RouterOS is configured
 	docker compose up --detach --build
-	docker compose logs --follow toolbox
-	docker compose wait toolbox >/dev/null
+	@echo "Configuring RouterOS..."
+	@if [ "$$(docker wait bkpupd-lab-toolbox)" != 0 ]; then docker logs bkpupd-lab-toolbox; exit 1; fi
+	@echo
+	@echo "RouterOS lab is ready. Login: admin / admin"
+	@echo "  SSH      $$(docker compose port routeros 22)"
+	@echo "  WebFig   http://$$(docker compose port routeros 80)"
+	@echo "  WinBox   $$(docker compose port routeros 8291)"
+	@echo "  Mailpit  http://$$(docker compose port mailpit 8025)"
 
 down: ## Stop the lab and discard all state
 	docker compose down --remove-orphans

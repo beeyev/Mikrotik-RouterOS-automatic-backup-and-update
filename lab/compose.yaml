@@ -30,5 +30,6 @@ services:
   # One-shot: sets the admin password and e-mail settings, then exits.
   toolbox:
     build: ./toolbox
+    container_name: bkpupd-lab-toolbox
     depends_on:
       - routeros
