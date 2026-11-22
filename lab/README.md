@@ -1,6 +1,6 @@
 # Local RouterOS test lab
 
-MikroTik RouterOS CHR 7.24.6 with a Mailpit inbox, for developing and testing `BackupAndUpdate.rsc`.
+MikroTik RouterOS CHR with a Mailpit inbox, for developing and testing `BackupAndUpdate.rsc`.
 RouterOS starts with `/tool e-mail` already sending to Mailpit.
 
 ## Start the lab
@@ -9,10 +9,9 @@ RouterOS starts with `/tool e-mail` already sending to Mailpit.
 make up
 ```
 
-`make up` returns when RouterOS is ready. `make help` lists the other targets.
+`make up` returns when RouterOS is configured. `make help` lists the other targets.
 
-The lab keeps no state. Every start, including a container restart, boots a clean RouterOS.
-Run `make restart` to get a fresh one.
+The lab keeps no state. Run `make down up` to get a fresh, configured RouterOS.
 
 ## Access
 
@@ -41,7 +40,7 @@ make ros CMD='/tool e-mail send to="lab@example.test" subject="lab test" body="m
 
 ## Test the script
 
-Add the script from this repository through the REST API:
+Add the script from this repository through the REST API (needs `jq` and `curl`):
 
 ```sh
 jq -Rs '{name: "BackupAndUpdate", source: .}' ../BackupAndUpdate.rsc \

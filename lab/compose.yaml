@@ -1,7 +1,4 @@
 # Disposable RouterOS lab. See README.md.
-#
-# Every start is a clean RouterOS: the CHR disk lives on tmpfs and the toolbox
-# configures it again. Nothing survives `make down` or a container restart.
 
 name: bkpupd-lab
 
@@ -19,29 +16,19 @@ services:
     # https://github.com/EvilFreelancer/docker-routeros
     image: evilfreelancer/docker-routeros:7.24.6
     # The image copies the CHR disk into /routeros on start and reuses it after.
-    # tmpfs throws it away with the container, so a restart boots a clean disk.
+    # tmpfs throws it away with the container, so every start boots a clean disk.
     tmpfs:
       - /routeros:size=512m
     # A single network keeps the image on QEMU user-mode networking: no tap,
     # no bridge, no NET_ADMIN. RouterOS reaches mailpit and the internet via NAT
-    # and resolves container names through Docker DNS. ICMP does not pass.
+    # and resolves container names through Docker DNS.
     ports:
       - "127.0.0.1:12222:22"
       - "127.0.0.1:12280:80"     # WebFig and REST API
       - "127.0.0.1:18291:8291"
 
+  # One-shot: sets the admin password and e-mail settings, then exits.
   toolbox:
     build: ./toolbox
-    init: true
     depends_on:
-      mailpit:
-        condition: service_healthy
-      routeros:
-        condition: service_started
-        # A fresh RouterOS needs configuring again.
-        restart: true
-    healthcheck:
-      test: ["CMD", "test", "-f", "/run/lab-ready"]
-      interval: 5s
-      start_period: 15m
-      start_interval: 2s
+      - routeros
