@@ -1,0 +1,6 @@
+# Hardware acceleration for the CHR. The Makefile adds this file when /dev/kvm
+# exists; without it QEMU emulates the CPU, which works but boots much slower.
+services:
+  routeros:
+    devices:
+      - /dev/kvm

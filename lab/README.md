@@ -1,51 +1,66 @@
 # Local RouterOS test lab
 
-This lab runs MikroTik RouterOS CHR for development and manual tests.
+MikroTik RouterOS CHR 7.24.6 with a Mailpit inbox, for developing and testing `BackupAndUpdate.rsc`.
+RouterOS starts with `/tool e-mail` already sending to Mailpit.
 
 ## Start the lab
 
 ```sh
-make start
-make state
+make up
 ```
 
-RouterOS can take up to two minutes to accept SSH connections on its first boot.
-The `routeros-init` container retries during that period and exits after it applies the mail settings.
+`make up` returns when RouterOS is ready. `make help` lists the other targets.
+
+The lab keeps no state. Every start, including a container restart, boots a clean RouterOS.
+Run `make restart` to get a fresh one.
 
 ## Access
 
 | Service | Address |
 | --- | --- |
-| Mailpit web interface | <http://localhost:8025> |
-| RouterOS WebFig | <http://localhost:12280> |
-| RouterOS WinBox | `localhost:18291` |
-| RouterOS SSH | `localhost:12222` |
-| RouterOS Telnet | `localhost:12223` |
-| RouterOS API | `localhost:18728` |
-| RouterOS API over TLS | `localhost:18729` |
+| Mailpit web interface | <http://127.0.0.1:8025> |
+| RouterOS WebFig and REST API | <http://127.0.0.1:12280> |
+| RouterOS SSH | `127.0.0.1:12222` |
+| RouterOS WinBox | `127.0.0.1:18291` |
 
-!! Use the RouterOS user `admin` with an empty password. Use this account inside the isolated lab.
+RouterOS user `admin`, password `admin`.
 
-## Mailpit and ping
+Run a RouterOS command without an SSH client:
 
-Expect `ping mailpit` from RouterOS to time out. Docker DNS still resolves the `mailpit` name, and SMTP traffic can reach port `1025`.
-The Docker and QEMU network path does not provide a useful ICMP health check for this service.
-
-Test SMTP from a RouterOS terminal:
-
-```routeros
-/tool e-mail send to="lab@example.test" subject="lab test" body="mail works"
+```sh
+make ros CMD='/system resource print'
 ```
 
-Open <http://localhost:8025> and check that Mailpit received the message. Use message delivery as the health check for this lab.
+RouterOS returns exit status 0 over SSH even when a command fails, so read the output.
 
-## Usage
+Send a test message and check that it shows up in Mailpit:
 
-```routeros
-/system script run BackupAndUpdate
+```sh
+make ros CMD='/tool e-mail send to="lab@example.test" subject="lab test" body="mail works"'
 ```
 
-Follow the script log while it runs:
-```routeros
-/log print follow where message~"Bkp&Upd"
+## Test the script
+
+Add the script from this repository through the REST API:
+
+```sh
+jq -Rs '{name: "BackupAndUpdate", source: .}' ../BackupAndUpdate.rsc \
+  | curl -fsS -u admin:admin -X PUT -H 'content-type: application/json' --data-binary @- \
+    http://127.0.0.1:12280/rest/system/script
 ```
+
+To load an edited version, remove the old one first with
+`make ros CMD='/system script remove BackupAndUpdate'`.
+
+Run it and read its log:
+
+```sh
+make ros CMD='/system script run BackupAndUpdate'
+make ros CMD='/log print where message~"Bkp&Upd"'
+```
+
+Mailpit accepts any recipient, so the script's default `emailAddress` works. Check the result at
+<http://127.0.0.1:8025>.
+
+With the default `scriptMode` of `osupdate`, the script upgrades RouterOS to the latest stable
+release and reboots it. `make ros` fails until RouterOS is back.

@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+#
+# Lab toolbox: sets the RouterOS admin password, points /tool e-mail at
+# Mailpit, and runs RouterOS commands for `make ros`. See lab/README.md.
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+
+readonly PROGNAME='lab'
+readonly ROS_HOST='routeros'
+readonly ROS_USER='admin'
+# Documented lab defaults, not secrets: exposure in argv or logs is harmless.
+readonly ROS_PASSWORD='admin'
+readonly READY_FILE='/run/lab-ready'
+readonly BOOT_TIMEOUT=900
+
+readonly SSH_OPTS=(
+  -o StrictHostKeyChecking=no
+  -o UserKnownHostsFile=/dev/null
+  -o LogLevel=ERROR
+  -o ConnectTimeout=5
+)
+
+log() {
+  printf '%s: %s\n' "${PROGNAME}" "$*" >&2
+}
+
+die() {
+  log "error: $*"
+  exit 1
+}
+
+trap 'log "error: command failed at line ${LINENO}"' ERR
+
+# Runs a RouterOS command over SSH, or opens a session without arguments.
+# Passing the command to the remote shell is the point: callers are lab users.
+ros() {
+  if (($# == 0)); then
+    SSHPASS="${ROS_PASSWORD}" exec sshpass -e ssh -t "${SSH_OPTS[@]}" "${ROS_USER}@${ROS_HOST}"
+  fi
+  SSHPASS="${ROS_PASSWORD}" sshpass -e ssh "${SSH_OPTS[@]}" "${ROS_USER}@${ROS_HOST}" "$*"
+}
+
+ros_alive() {
+  local out
+  out="$(ros ':put lab-alive' 2>/dev/null)" || return 1
+  [[ ${out} == *lab-alive* ]]
+}
+
+# Logs in with the factory empty password, which only a fresh CHR accepts.
+ros_factory() {
+  ssh "${SSH_OPTS[@]}" -o BatchMode=yes -o PreferredAuthentications=none \
+    "${ROS_USER}@${ROS_HOST}" "$*"
+}
+
+# True once the REST API accepts the lab password. SSH cannot tell: with an
+# empty password RouterOS lets in any SSH login, whatever password is sent.
+rest_password_ok() {
+  local code
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
+    --user "${ROS_USER}:${ROS_PASSWORD}" "http://${ROS_HOST}/rest/system/identity")" || return 1
+  [[ ${code} == 200 ]]
+}
+
+# Waits until RouterOS accepts the lab password on REST and SSH. A fresh CHR
+# has an empty admin password; it is replaced on first contact.
+wait_router() {
+  local deadline=$((SECONDS + BOOT_TIMEOUT)) out
+  while ((SECONDS < deadline)); do
+    if rest_password_ok && ros_alive; then
+      return 0
+    fi
+    if out="$(ros_factory ':put lab-alive' 2>/dev/null)" && [[ ${out} == *lab-alive* ]]; then
+      ros_factory "/user set [find name=${ROS_USER}] password=${ROS_PASSWORD}" >/dev/null
+      log "admin password set"
+      continue
+    fi
+    sleep 2
+  done
+  die "RouterOS did not answer within ${BOOT_TIMEOUT}s"
+}
+
+configure_router() {
+  local out
+  out="$(ros '/tool e-mail set server=mailpit port=1025 from=routeros@lab.test tls=no')"
+  # RouterOS exits 0 over SSH even on errors; a successful `set` prints nothing.
+  if [[ -n ${out//[[:space:]]/} ]]; then
+    die "RouterOS rejected the e-mail settings: ${out}"
+  fi
+  log "e-mail goes to mailpit:1025"
+}
+
+# Container entrypoint: configure RouterOS, report healthy, then idle.
+serve() {
+  rm -f -- "${READY_FILE}"
+  log "waiting for RouterOS"
+  wait_router
+  configure_router
+  touch "${READY_FILE}"
+  log "lab ready"
+  exec sleep infinity
+}
+
+main() {
+  case "${1:-}" in
+    serve) serve ;;
+    ros)
+      shift
+      ros "$@"
+      ;;
+    *)
+      log "usage: lab serve | lab ros [COMMAND]"
+      exit 64
+      ;;
+  esac
+}
+
+main "$@"

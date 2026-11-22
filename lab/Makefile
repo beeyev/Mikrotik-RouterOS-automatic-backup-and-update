@@ -1,62 +1,33 @@
--include .docker-compose.env
+# RouterOS lab. See README.md.
 
-#export COMPOSE_FILE=docker-compose-dev.yml
-# export COMPOSE_PROJECT_NAME=dev
-export DOCKER_BUILDKIT?=1
-export COMPOSE_CONVERT_WINDOWS_PATHS?=1
-export TZ?=UTC
-export BUILD_DATE?=$(shell TZ=":UTC" date '+%Y-%m-%d %H:%M:%S (%Z)')
-.EXPORT_ALL_VARIABLES:
-.PHONY: *
 .DEFAULT_GOAL := help
+SHELL := bash
+MAKEFLAGS += --no-print-directory
 
-THIS_FILE := $(abspath $(lastword $(MAKEFILE_LIST)))
-CURRENT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+# KVM when the host has it; QEMU falls back to slower CPU emulation.
+COMPOSE := docker compose -f compose.yaml$(if $(wildcard /dev/kvm), -f compose.kvm.yaml)
 
-DOCKER_COMPOSE_COMMAND := $(shell \
-	if docker compose version >/dev/null 2>&1; then echo "docker compose"; \
-	elif docker-compose version >/dev/null 2>&1; then echo "docker-compose"; \
-	else echo ""; fi)
+# Passed through the environment so quotes and spaces survive.
+export CMD
 
-ifeq ($(DOCKER_COMPOSE_COMMAND),)
-  $(error "docker compose is required")
-endif
+.PHONY: help up down restart ssh ros
 
 help: ## Show this help
-	@echo "Make Application Docker Images and Containers using Docker-Compose files in 'docker' Dir."
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m (default: help)\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  %-8s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-up: ## Docker compose up
-	$(DOCKER_COMPOSE_COMMAND) up --build --no-deps --detach --remove-orphans
+up: ## Start a fresh lab and wait until RouterOS is ready
+	$(COMPOSE) up --detach --build --wait --wait-timeout 900
 
-start: ## Alias for up
-	$(MAKE) up
+down: ## Stop the lab and discard all state
+	$(COMPOSE) down --remove-orphans
 
-down: ## Docker compose down
-	$(DOCKER_COMPOSE_COMMAND) down --remove-orphans
+restart: ## Recreate the lab from scratch
+	@$(MAKE) down
+	@$(MAKE) up
 
-stop: ## Docker compose stop
-	$(DOCKER_COMPOSE_COMMAND) stop
+ssh: ## Open a RouterOS terminal
+	@$(COMPOSE) exec toolbox lab ros
 
-restart: ## Restart containers
-	$(MAKE) down
-	$(MAKE) up
-	$(info Restart completed)
-
-update: ## Update containers
-	$(DOCKER_COMPOSE_COMMAND) pull
-	$(MAKE) up
-
-destroy: ## Destroy containers/volumes (keep sources app folders)
-	$(MAKE) stop
-	$(DOCKER_COMPOSE_COMMAND) down --rmi all --remove-orphans
-
-rebuild: ## Rebuild docker container (destroy & upgrade)
-	$(MAKE) destroy
-	$(MAKE) up
-
-state: ## Show current state
-	$(DOCKER_COMPOSE_COMMAND) ps
-
-logs: ## Show docker logs
-	$(DOCKER_COMPOSE_COMMAND) logs -f --tail=100 $(ARGS)
+ros: ## Run a RouterOS command: make ros CMD='/system resource print'
+	@if [[ -z "$${CMD:-}" ]]; then echo "usage: make ros CMD='<RouterOS command>'" >&2; exit 2; fi
+	@$(COMPOSE) exec -T toolbox lab ros "$$CMD"
