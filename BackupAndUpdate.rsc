@@ -409,21 +409,21 @@
 
 :local mailSubjectPrefix  "$SMP Device - `$deviceIdentityNameShort`"
 
-:local mailBodyCopyright  "Mikrotik RouterOS automatic backup & update (ver. $scriptVersion) \nhttps://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update"
+:local mailBodyCopyright  "Mikrotik RouterOS automatic backup & update (ver. $scriptVersion) \r\nhttps://github.com/beeyev/Mikrotik-RouterOS-automatic-backup-and-update"
 :local changelogUrl     "Check RouterOS changelog: https://mikrotik.com/download/changelogs/"
 
 :local mailBodyDeviceInfo  ""
 :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "Device information:")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\n---------------------")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nName: $deviceIdentityName")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nModel: $deviceRbModel")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nBoard: $deviceBoardName")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nSerial number: $deviceRbSerialNumber")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nRouterOS version: v$deviceOsVerAndChannelRunning")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nBuild time: $[/system resource get build-time]")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nRouterboard FW: $deviceRbCurrentFw")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nDevice date-time: $rawDate $rawTime ($[/system clock get time-zone-name ])")
-:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nUptime: $[/system resource get uptime]")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\r\n---------------------")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\r\nName: $deviceIdentityName")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\r\nModel: $deviceRbModel")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\r\nBoard: $deviceBoardName")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\r\nSerial number: $deviceRbSerialNumber")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\r\nRouterOS version: v$deviceOsVerAndChannelRunning")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\r\nBuild time: $[/system resource get build-time]")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\r\nRouterboard FW: $deviceRbCurrentFw")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\r\nDevice date-time: $rawDate $rawTime ($[/system clock get time-zone-name ])")
+:set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\r\nUptime: $[/system resource get uptime]")
 # IP address will be appended later if needed
 
 :local mailAttachments  [:toarray ""]
@@ -459,7 +459,7 @@
     :set publicIpAddress ([:pick $publicIpAddress 0 15])
 
     :if ($detectPublicIpAddress = true) do={
-      :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\nPublic IP address: $publicIpAddress")
+      :set mailBodyDeviceInfo ($mailBodyDeviceInfo . "\r\nPublic IP address: $publicIpAddress")
       :log info "$SMP Public IP address detected: `$publicIpAddress`"
     }
   }
@@ -515,7 +515,7 @@
       :set isEmailNeedsToBeSent true
 
       :set mailSubjectPartAction "New RouterOS available"
-      :set mailPtBodyAction  "New RouterOS version is available, current version: v$runningOsVersion, new version: v$routerOsVersionAvailable. \n$changelogUrl"
+      :set mailPtBodyAction  "New RouterOS version is available, current version: v$runningOsVersion, new version: v$routerOsVersionAvailable. \r\n$changelogUrl"
     } else={
       :if ($packageUpdateStatus = "System is already up to date") do={
         :log info ("$SMP No new RouterOS version is available, the latest version is already installed: `v$runningOsVersion`")
@@ -528,7 +528,7 @@
         :set isEmailNeedsToBeSent true
 
         :set mailSubjectPartAction "Error unable to check new os version"
-        :set mailPtBodyAction  "An error occurred while checking for a new RouterOS version.\nStatus returned: `$packageUpdateStatus`\n\nPlease review the logs on the device for more details and verify internet connectivity."
+        :set mailPtBodyAction  "An error occurred while checking for a new RouterOS version.\r\nStatus returned: `$packageUpdateStatus`\r\n\r\nPlease review the logs on the device for more details and verify internet connectivity."
       }
     }
   }
@@ -541,7 +541,7 @@
         :set isOsNeedsToBeUpdated true
       } else={
         :log info "$SMP The script will not install this update, because it is not a patch update. Current version: v$runningOsVersion, new version: v$routerOsVersionAvailable"
-        :set mailPtBodyAction ($mailPtBodyAction . "\nThis update will not be installed, because the script is set to install only patch updates.")
+        :set mailPtBodyAction ($mailPtBodyAction . "\r\nThis update will not be installed, because the script is set to install only patch updates.")
       }
     } else={
       :set isOsNeedsToBeUpdated true
@@ -563,10 +563,10 @@
 
       #Email body if the purpose of the script is to update the device
       :set mailSubjectPartAction "Update preparation"
-      :set mailPtBodyAction ($mailPtBodyAction . "\nThe update process for device '$deviceIdentityName' is scheduled to upgrade RouterOS from version v.$runningOsVersion to version v.$routerOsVersionAvailable (Update channel: $updateChannel)")
-      :set mailPtBodyAction ($mailPtBodyAction . "\nPlease note: The update will proceed only after a successful backup.")
-      :set mailPtBodyAction ($mailPtBodyAction . "\nA final report with detailed information will be sent once the update process is completed.")
-      :set mailPtBodyAction ($mailPtBodyAction . "\nIf you do not receive a second email within the next 10 minutes, there may be an issue. Please check your device logs for further information.")
+      :set mailPtBodyAction ($mailPtBodyAction . "\r\nThe update process for device '$deviceIdentityName' is scheduled to upgrade RouterOS from version v.$runningOsVersion to version v.$routerOsVersionAvailable (Update channel: $updateChannel)")
+      :set mailPtBodyAction ($mailPtBodyAction . "\r\nPlease note: The update will proceed only after a successful backup.")
+      :set mailPtBodyAction ($mailPtBodyAction . "\r\nA final report with detailed information will be sent once the update process is completed.")
+      :set mailPtBodyAction ($mailPtBodyAction . "\r\nIf you do not receive a second email within the next 10 minutes, there may be an issue. Please check your device logs for further information.")
     }
 
     :do {
@@ -595,10 +595,10 @@
     :if ($mailSubjectPartAction != "")  do={:set mailStep1Subject ($mailStep1Subject . " - " . $mailSubjectPartAction)}
     :if ($mailPtSubjectBackup != "")  do={:set mailStep1Subject ($mailStep1Subject . " - " . $mailPtSubjectBackup)}
     # body
-    :if ($mailPtBodyAction != "") do={:set mailStep1Body ($mailStep1Body . $mailPtBodyAction . "\n\n")}
-    :if ($mailPtBodyBackup != "") do={:set mailStep1Body ($mailStep1Body . $mailPtBodyBackup . "\n\n")}
+    :if ($mailPtBodyAction != "") do={:set mailStep1Body ($mailStep1Body . $mailPtBodyAction . "\r\n\r\n")}
+    :if ($mailPtBodyBackup != "") do={:set mailStep1Body ($mailStep1Body . $mailPtBodyBackup . "\r\n\r\n")}
 
-    :set mailStep1Body ($mailStep1Body . $mailBodyDeviceInfo . "\n\n" . $mailBodyCopyright)
+    :set mailStep1Body ($mailStep1Body . $mailBodyDeviceInfo . "\r\n\r\n" . $mailBodyCopyright)
 
     # Send email with backups
     :do {$FuncSendEmailSafe $emailAddress $mailStep1Subject $mailStep1Body $mailAttachments} on-error={
@@ -687,16 +687,16 @@
 
     :set mailStep3Subject ($mailStep3Subject . " - Update completed - Backup created")
     :set mailStep3Body ($mailStep3Body . "RouterOS upgrade process was completed")
-    :set mailStep3Body ($mailStep3Body . "\nNew RouterOS version: v.$targetOsVersion")
+    :set mailStep3Body ($mailStep3Body . "\r\nNew RouterOS version: v.$targetOsVersion")
     :if ($isCloudHostedRouter = false) do={:set mailStep3Body ($mailStep3Body . ", routerboard firmware: v.$deviceRbCurrentFw")}
-    :set mailStep3Body ($mailStep3Body . "\n$changelogUrl\nBackups of the upgraded system are in the attachment of this email.\n\n$mailBodyDeviceInfo\n\n$mailBodyCopyright")
+    :set mailStep3Body ($mailStep3Body . "\r\n$changelogUrl\r\nBackups of the upgraded system are in the attachment of this email.\r\n\r\n$mailBodyDeviceInfo\r\n\r\n$mailBodyCopyright")
 
     :set mailAttachments [$FuncCreateBackups $backupNameAfterUpdate $backupPassword $sensitiveDataInConfig]
   } else={
     :log error "$SMP Failed to verify new RouterOS version: target: `$targetOsVersion`, current: `$runningOsVersion`"
     :set mailStep3Subject ($mailStep3Subject . " - Update failed")
 
-    :set mailStep3Body ($mailStep3Body . "The script was unable to verify that the new RouterOS version was installed, target version: `$targetOsVersion`, current version: `$runningOsVersion`\nCheck device logs for more details.\n\n$mailBodyDeviceInfo\n\n$mailBodyCopyright")
+    :set mailStep3Body ($mailStep3Body . "The script was unable to verify that the new RouterOS version was installed, target version: `$targetOsVersion`, current version: `$runningOsVersion`\r\nCheck device logs for more details.\r\n\r\n$mailBodyDeviceInfo\r\n\r\n$mailBodyCopyright")
   }
 
   $FuncSendEmailSafe $emailAddress $mailStep3Subject $mailStep3Body $mailAttachments
