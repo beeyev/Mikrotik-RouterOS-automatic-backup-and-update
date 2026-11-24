@@ -3,9 +3,9 @@
 # SCRIPT INFORMATION
 #
 # Script:  Mikrotik RouterOS automatic backup & update
-# Version: 26.11.03
+# Version: 26.11.24
 # Created: 07/08/2018
-# Updated: 03/11/2026
+# Updated: 24/11/2026
 # Author:  Alexander Tebiev
 # Website: https://github.com/beeyev
 # You can contact me by e-mail at tebiev@mail.com
@@ -56,7 +56,7 @@
 
 #  !!! DO NOT EDIT BELOW THIS LINE UNLESS YOU KNOW WHAT YOU’RE DOING !!!
 
-:local scriptVersion "26.11.03"
+:local scriptVersion "26.11.24"
 
 # default and fallback public IP detection services
 :local ipAddressDetectServiceDefault "https://ipv4.mikrotik.ovh/"
