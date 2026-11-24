@@ -1,62 +1,42 @@
--include .docker-compose.env
+# RouterOS lab. See README.md.
 
-#export COMPOSE_FILE=docker-compose-dev.yml
-# export COMPOSE_PROJECT_NAME=dev
-export DOCKER_BUILDKIT?=1
-export COMPOSE_CONVERT_WINDOWS_PATHS?=1
-export TZ?=UTC
-export BUILD_DATE?=$(shell TZ=":UTC" date '+%Y-%m-%d %H:%M:%S (%Z)')
-.EXPORT_ALL_VARIABLES:
-.PHONY: *
-.DEFAULT_GOAL := help
+# RouterOS major version for ssh, ros and script.
+V ?= 7
+ROUTER = $(if $(filter 6 7,$(V)),routeros$(V),$(error V must be 6 or 7, got '$(V)'))
+port = $$(docker compose port $(1) $(2))
 
-THIS_FILE := $(abspath $(lastword $(MAKEFILE_LIST)))
-CURRENT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+# Passed through the environment so quotes and spaces survive. $(value)
+# keeps make from expanding RouterOS variables such as $x.
+override CMD := $(value CMD)
+export CMD
 
-DOCKER_COMPOSE_COMMAND := $(shell \
-	if docker compose version >/dev/null 2>&1; then echo "docker compose"; \
-	elif docker-compose version >/dev/null 2>&1; then echo "docker-compose"; \
-	else echo ""; fi)
-
-ifeq ($(DOCKER_COMPOSE_COMMAND),)
-  $(error "docker compose is required")
-endif
+.PHONY: help up down ssh ros script
 
 help: ## Show this help
-	@echo "Make Application Docker Images and Containers using Docker-Compose files in 'docker' Dir."
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m (default: help)\n\nTargets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  %-6s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-up: ## Docker compose up
-	$(DOCKER_COMPOSE_COMMAND) up --build --no-deps --detach --remove-orphans
+up: ## Start the lab and wait until both routers are configured
+	docker compose up --detach --build
+	@docker logs --follow bkpupd-lab-toolbox
+	@test "$$(docker wait bkpupd-lab-toolbox)" = 0
+	@echo
+	@echo "RouterOS lab is ready. Login: admin / admin"
+	@echo "  v7  SSH $(call port,routeros7,22)  WebFig http://$(call port,routeros7,80)  WinBox $(call port,routeros7,8291)"
+	@echo "  v6  SSH $(call port,routeros6,22)  WebFig http://$(call port,routeros6,80)  WinBox $(call port,routeros6,8291)"
+	@echo "  Mailpit http://$(call port,mailpit,8025)"
 
-start: ## Alias for up
-	$(MAKE) up
+down: ## Stop the lab and discard all state
+	docker compose down --remove-orphans
 
-down: ## Docker compose down
-	$(DOCKER_COMPOSE_COMMAND) down --remove-orphans
+ssh: ## Open a RouterOS terminal: make ssh [V=6]
+	@echo "Type /quit or press Ctrl+D to leave the RouterOS terminal."
+	@docker compose --progress quiet run --rm --no-deps toolbox lab ros $(ROUTER)
 
-stop: ## Docker compose stop
-	$(DOCKER_COMPOSE_COMMAND) stop
+ros: ## Run a RouterOS command: make ros [V=6] CMD='/system resource print'
+	$(if $(CMD),,$(error usage: make ros [V=6] CMD='<RouterOS command>'))
+	@docker compose --progress quiet run --rm --no-deps -T toolbox lab ros $(ROUTER) "$$CMD"
 
-restart: ## Restart containers
-	$(MAKE) down
-	$(MAKE) up
-	$(info Restart completed)
-
-update: ## Update containers
-	$(DOCKER_COMPOSE_COMMAND) pull
-	$(MAKE) up
-
-destroy: ## Destroy containers/volumes (keep sources app folders)
-	$(MAKE) stop
-	$(DOCKER_COMPOSE_COMMAND) down --rmi all --remove-orphans
-
-rebuild: ## Rebuild docker container (destroy & upgrade)
-	$(MAKE) destroy
-	$(MAKE) up
-
-state: ## Show current state
-	$(DOCKER_COMPOSE_COMMAND) ps
-
-logs: ## Show docker logs
-	$(DOCKER_COMPOSE_COMMAND) logs -f --tail=100 $(ARGS)
+script: ## Load ../BackupAndUpdate.rsc into RouterOS: make script [V=6]
+	@grep -q '^:local anonStats true$$' ../BackupAndUpdate.rsc || { echo "anonStats line not found in ../BackupAndUpdate.rsc" >&2; exit 1; }
+	@sed 's/^:local anonStats true/:local anonStats false/' ../BackupAndUpdate.rsc \
+		| docker compose --progress quiet run --rm --no-deps -T toolbox lab script $(ROUTER)

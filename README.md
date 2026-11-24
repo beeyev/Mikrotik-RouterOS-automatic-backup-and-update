@@ -63,6 +63,9 @@ Once everything is set up, it's important to verify that the script is functioni
 To do this, open a New Terminal and a Log window in your WinBox, then manually execute the script by typing `/system script run BackupAndUpdate;` in the Terminal.
 You will see the script the script's operation in the log window. If the script completes without any errors, check your email. You'll find a new message with backups from your MikroTik awaiting you. 🎉
 
+## Development
+To develop and debug the script, use the local RouterOS lab in [lab/](lab/README.md). It starts MikroTik CHR v7 and v6 with a Mailpit inbox in Docker with a single `make up`.
+
 ## Acknowledgements
 I would like to extend my sincere gratitude to the following individuals who have contributed to this project:
  - DJ5KP, website: [dj5kp.de](http://dj5kp.de/)

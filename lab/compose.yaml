@@ -1,60 +1,56 @@
+# Disposable RouterOS lab. See README.md.
+
+name: bkpupd-lab
+
 services:
-
   mailpit:
-    container_name: '${COMPOSE_PROJECT_NAME}-mailpit'
     image: axllent/mailpit:latest
-    tty: true
-    restart: unless-stopped
     environment:
-      - 'TZ=${TZ:-UTC}'
-      - 'MP_SMTP_AUTH_ACCEPT_ANY=1'
-      - 'MP_SMTP_AUTH_ALLOW_INSECURE=1'
-      - 'MP_ALLOW_UNTRUSTED_TLS=1'
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
     ports:
-      - '8025:8025' # Web UI
-    networks:
-      - default
+      - "127.0.0.1:8025:8025"
 
-  routeros:
+  routeros7:
     # https://github.com/EvilFreelancer/docker-routeros
-    # https://hub.docker.com/r/evilfreelancer/docker-routeros/
-    container_name: '${COMPOSE_PROJECT_NAME}-routeros'
-    image: evilfreelancer/docker-routeros:7.21.4
-    restart: unless-stopped
-    tty: true
-    depends_on:
-      mailpit:
-        condition: service_healthy
-    cap_add:
-      - NET_ADMIN
-    devices:
-      - /dev/net/tun
-      - /dev/kvm
+    image: evilfreelancer/docker-routeros:7.24.6
+    # The image copies the CHR disk into /routeros on start and reuses it after.
+    # tmpfs throws it away with the container, so every start boots a clean disk.
+    tmpfs:
+      - /routeros:size=512m
+    # A single network keeps the image on QEMU user-mode networking: no tap,
+    # no bridge, no NET_ADMIN. RouterOS reaches mailpit and the internet via NAT
+    # and resolves container names through Docker DNS.
     ports:
-      - "12280:80"
-      - "12222:22"
-      - "12223:23"
-      - "18728:8728"
-      - "18729:8729"
-      - "18291:8291"
-    # The image keeps eth0 for QEMU host forwarding and bridges eth1 into CHR.
-    networks:
-      default:
-        interface_name: eth0
-      routeros-lan:
-        interface_name: eth1
+      - "127.0.0.1:17022:22"
+      - "127.0.0.1:17080:80"     # WebFig and REST API
+      - "127.0.0.1:17291:8291"
 
-  routeros-init:
-    build:
-      context: ./docker/routeros-init
-    restart: "no"
+  routeros6:
+    # 6.49.21 and later lose their config on every reboot here, so the script's upgrade never finishes.
+    image: evilfreelancer/docker-routeros:6.49.20
+    tmpfs:
+      - /routeros:size=512m
+    # The v6 image's entrypoint bridges eth0 to a tap device, which needs NET_ADMIN
+    # and /dev/net/tun. Run QEMU with user-mode networking instead, as the v7 image does.
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        cp /routeros_source/$$ROUTEROS_IMAGE /routeros/ &&
+        exec qemu-system-x86_64 -nographic -serial mon:stdio -m 512 -smp 4 -cpu qemu64
+        -nic user,hostfwd=tcp::22-:22,hostfwd=tcp::80-:80,hostfwd=tcp::8291-:8291
+        -hda /routeros/$$ROUTEROS_IMAGE
+    ports:
+      - "127.0.0.1:16022:22"
+      - "127.0.0.1:16080:80"     # WebFig, v6 has no REST API
+      - "127.0.0.1:16291:8291"
+
+  # One-shot: configures both routers (see toolbox/lab.sh), then exits.
+  toolbox:
+    build: ./toolbox
+    container_name: bkpupd-lab-toolbox
+    init: true
     depends_on:
-      routeros:
-        condition: service_started
-    networks:
-      - default
-
-
-networks:
-  routeros-lan:
-    driver: bridge
+      - routeros7
+      - routeros6

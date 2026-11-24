@@ -1,4 +1,5 @@
 .ignore/
+.serena/
 .idea/
 .vscode/
 .agents/
