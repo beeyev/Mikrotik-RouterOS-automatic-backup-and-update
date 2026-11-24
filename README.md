@@ -67,9 +67,6 @@ You will see the script the script's operation in the log window. If the script 
 To develop and debug the script, use the local RouterOS lab in [lab/](lab/README.md). It starts MikroTik CHR v7 and v6 with a Mailpit inbox in Docker with a single `make up`.
 
 ## Acknowledgements
-I would like to extend my sincere gratitude to the following individuals who have contributed to this project:
- - DJ5KP, website: [dj5kp.de](http://dj5kp.de/)
-
 Special thanks to the talented people who are working at [MikroTik](https://mikrotik.com) for their contributions in creating such outstanding products.
 
 ## License
