@@ -1,8 +1,8 @@
 # Local RouterOS test lab
 
-MikroTik RouterOS CHR with a Mailpit inbox, for developing and testing `BackupAndUpdate.rsc`.
-RouterOS starts with `/tool e-mail` already sending to Mailpit and its log stored on disk, so the
-log survives reboots.
+MikroTik RouterOS v7 and v6 CHR with a shared Mailpit inbox, for developing and testing
+`BackupAndUpdate.rsc`. Both routers start with `/tool e-mail` already sending to Mailpit and their log
+stored on disk, so the log survives reboots.
 
 ## Start the lab
 
@@ -10,20 +10,21 @@ log survives reboots.
 make up
 ```
 
-`make up` returns when RouterOS is configured. `make help` lists the other targets.
+`make up` returns when both routers are configured. `make help` lists the other targets.
 
-The lab keeps no state. Run `make down up` to get a fresh, configured RouterOS.
+The lab keeps no state. Run `make down up` to get fresh, configured routers.
 
 ## Access
 
-| Service | Address |
-| --- | --- |
-| Mailpit web interface | <http://127.0.0.1:8025> |
-| RouterOS WebFig and REST API | <http://127.0.0.1:12280> |
-| RouterOS SSH | `127.0.0.1:12222` |
-| RouterOS WinBox | `127.0.0.1:18291` |
+| Service | RouterOS v7 | RouterOS v6 |
+| --- | --- | --- |
+| SSH | `127.0.0.1:17022` | `127.0.0.1:16022` |
+| WebFig | <http://127.0.0.1:17080> (also REST API) | <http://127.0.0.1:16080> |
+| WinBox | `127.0.0.1:17291` | `127.0.0.1:16291` |
 
-RouterOS user `admin`, password `admin`.
+RouterOS user `admin`, password `admin`. Mailpit web interface: <http://127.0.0.1:8025>.
+
+The `make` targets below act on v7. Add `V=6` for v6.
 
 `make ssh` opens a RouterOS terminal. Type `/quit` or press Ctrl+D to leave it.
 
@@ -43,18 +44,12 @@ make ros CMD='/tool e-mail send to="lab@example.test" subject="lab test" body="m
 
 ## Test the script
 
-Add the script from this repository through the REST API (needs `jq` and `curl`). The `sed`
-keeps lab runs out of the script's usage statistics.
+Load the script from this repository, with `anonStats` turned off so lab runs stay out of the
+script's usage statistics. It replaces any loaded copy, so run it again after each edit.
 
 ```sh
-sed 's/^:local anonStats true/:local anonStats false/' ../BackupAndUpdate.rsc \
-  | jq -Rs '{name: "BackupAndUpdate", source: .}' \
-  | curl -sS -u admin:admin -X PUT -H 'content-type: application/json' --data-binary @- \
-    http://127.0.0.1:12280/rest/system/script | jq 'del(.source)'
+make script
 ```
-
-To load an edited version, run the same command with `{source: .}`, `-X PATCH` and the URL
-`http://127.0.0.1:12280/rest/system/script/BackupAndUpdate`.
 
 Run it and read the log:
 
@@ -70,6 +65,16 @@ installs and reboots. Each script upload adds a copy of the script source to it.
 Errors in a run started with `make ros` print to its output and end with `(:error; line N)` or
 `(line N column M)`. The line numbers match the `.rsc` file.
 
+To test the upgrade from v6 to v7, set `updateChannel` to `"testing"` in `BackupAndUpdate.rsc`. On v6
+the `stable` and `long-term` channels only offer v6 releases. Then:
+
+```sh
+make script V=6
+make ros V=6 CMD='/system script run BackupAndUpdate'
+```
+
+The router installs v7, reboots and a few minutes later sends an "Update completed" mail to Mailpit.
+
 Mailpit accepts any recipient, so the script's default `emailAddress` works. Read mail through the
 Mailpit API:
 
@@ -80,5 +85,6 @@ curl -s http://127.0.0.1:8025/api/v1/message/<ID>/part/<PartID>       # one atta
 curl -s -X DELETE http://127.0.0.1:8025/api/v1/messages               # empty the inbox
 ```
 
-If the script reboots RouterOS, for example to install an update, `make ros` waits until RouterOS
-is back.
+If the script reboots RouterOS, for example to install an update, `make ros` ends with
+`Received disconnect ... shutdown/reboot` and make reports `Error 255`. A command sent while RouterOS
+is rebooting waits until it is back.

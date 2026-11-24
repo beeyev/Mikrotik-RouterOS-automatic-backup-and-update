@@ -64,7 +64,7 @@ To do this, open a New Terminal and a Log window in your WinBox, then manually e
 You will see the script the script's operation in the log window. If the script completes without any errors, check your email. You'll find a new message with backups from your MikroTik awaiting you. 🎉
 
 ## Development
-To develop and debug the script, use the local RouterOS lab in [lab/](lab/README.md). It starts a MikroTik CHR and a Mailpit inbox in Docker with a single `make up`.
+To develop and debug the script, use the local RouterOS lab in [lab/](lab/README.md). It starts MikroTik CHR v7 and v6 with a Mailpit inbox in Docker with a single `make up`.
 
 ## Acknowledgements
 I would like to extend my sincere gratitude to the following individuals who have contributed to this project:

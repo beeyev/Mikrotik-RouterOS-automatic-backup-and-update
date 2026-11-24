@@ -454,7 +454,8 @@
       }
     }
 
-    # basic safety
+    # basic safety: first line only (the service ends its answer with a line break), at most 15 chars
+    :set publicIpAddress [:pick $publicIpAddress 0 [:find ($publicIpAddress . "\n") "\n"]]
     :set publicIpAddress ([:pick $publicIpAddress 0 15])
 
     :if ($detectPublicIpAddress = true) do={
@@ -685,8 +686,9 @@
     :log info "$SMP Successfully verified new RouterOS version: target: `$targetOsVersion`, current: `$runningOsVersion`"
 
     :set mailStep3Subject ($mailStep3Subject . " - Update completed - Backup created")
-    :set mailStep3Body ($mailStep3Body . "RouterOS and routerboard upgrade process was completed")
-    :set mailStep3Body ($mailStep3Body . "\nNew RouterOS version: v.$targetOsVersion, routerboard firmware: v.$deviceRbCurrentFw")
+    :set mailStep3Body ($mailStep3Body . "RouterOS upgrade process was completed")
+    :set mailStep3Body ($mailStep3Body . "\nNew RouterOS version: v.$targetOsVersion")
+    :if ($isCloudHostedRouter = false) do={:set mailStep3Body ($mailStep3Body . ", routerboard firmware: v.$deviceRbCurrentFw")}
     :set mailStep3Body ($mailStep3Body . "\n$changelogUrl\nBackups of the upgraded system are in the attachment of this email.\n\n$mailBodyDeviceInfo\n\n$mailBodyCopyright")
 
     :set mailAttachments [$FuncCreateBackups $backupNameAfterUpdate $backupPassword $sensitiveDataInConfig]
